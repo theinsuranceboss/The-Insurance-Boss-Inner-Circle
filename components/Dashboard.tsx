@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../services/dbService';
 import { Affiliate, Lead, LeadStatus, PartnerApplication, LandingPageRequest } from '../types';
@@ -117,7 +116,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   };
 
   const handlePurge = (type: 'lead' | 'application' | 'landing_request' | 'affiliate', id: string) => {
-    if(confirm('PERMANENT ACTION: This will be deleted from the vault forever. Purge now?')) {
+    if(confirm('Permanent action: This will be deleted from the vault forever. Purge now?')) {
       db.purgeEntry(type, id);
       updateData();
     }
