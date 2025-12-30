@@ -1,0 +1,7 @@
+{
+  "name": "The Insurance Boss Inner Circle",
+  "description": "A high-conversion member management system for the Insurance Boss Inner Circle, featuring dynamic landing pages and a prioritized lead tracking dashboard.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
