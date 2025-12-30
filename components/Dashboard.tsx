@@ -180,9 +180,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                 <button 
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`text-sm font-bold tracking-widest transition-colors capitalize ${activeTab === tab ? 'text-[#EAB308]' : 'text-gray-500 hover:text-white'}`}
+                  className={`text-sm font-bold tracking-widest transition-colors ${activeTab === tab ? 'text-[#EAB308]' : 'text-gray-500 hover:text-white'}`}
                 >
-                  {tab === 'leads' ? 'Lead Vault' : tab === 'recycle_bin' ? 'Recycling Bin' : tab === 'payouts' ? 'Earnings' : tab === 'tools' ? 'Inner Circle Tools' : tab === 'program' ? 'Inner Circle Info' : tab}
+                  {tab === 'leads' ? 'Lead Vault' : tab === 'recycle_bin' ? 'Recycling Bin' : tab === 'payouts' ? 'Earnings' : tab === 'tools' ? 'Inner Circle Tools' : tab === 'program' ? 'Inner Circle Info' : tab.charAt(0).toUpperCase() + tab.slice(1).replace('_', ' ')}
                 </button>
               ))
             ) : (
@@ -190,7 +190,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                 <button 
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`text-sm font-bold tracking-widest transition-colors capitalize ${activeTab === tab ? 'text-[#EAB308]' : 'text-gray-500 hover:text-white'}`}
+                  className={`text-sm font-bold tracking-widest transition-colors ${activeTab === tab ? 'text-[#EAB308]' : 'text-gray-500 hover:text-white'}`}
                 >
                   {tab === 'applications' ? 'Membership Inquiries' : tab === 'landing_requests' ? 'Landing Requests' : tab === 'recycle_bin' ? 'Recycling Bin' : 'Circle Member Manager'}
                 </button>
@@ -200,10 +200,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         </div>
         <div className="flex items-center gap-6">
           <div className="hidden lg:block text-right">
-            <div className="text-[9px] text-gray-500 font-black tracking-widest uppercase">{isAdmin ? 'Executive Desk' : 'Inner Circle Member'}</div>
+            <div className="text-[9px] text-gray-500 font-black tracking-widest">{isAdmin ? 'Executive Desk' : 'Inner Circle Member'}</div>
             <div className="text-sm font-bold">{user.name}</div>
           </div>
-          <button onClick={onLogout} className="text-[10px] bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg transition-colors border border-white/10 font-black uppercase tracking-widest">Logout</button>
+          <button onClick={onLogout} className="text-[10px] bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg transition-colors border border-white/10 font-black tracking-widest">Logout</button>
         </div>
       </nav>
 
@@ -218,7 +218,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
-                    <tr className="text-[9px] text-gray-500 border-b border-white/5 tracking-[0.2em] bg-black/10 uppercase font-black">
+                    <tr className="text-[9px] text-gray-500 border-b border-white/5 tracking-[0.2em] bg-black/10 font-black">
                       <th className="px-8 py-5">Prospect Details</th>
                       <th className="px-8 py-5">Business Context</th>
                       <th className="px-8 py-5">Industry</th>
@@ -244,7 +244,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                       </tr>
                     )) : (
                       <tr>
-                        <td colSpan={5} className="px-8 py-20 text-center text-gray-600 font-bold tracking-widest uppercase">No Pending Membership Inquiries</td>
+                        <td colSpan={5} className="px-8 py-20 text-center text-gray-600 font-bold tracking-widest">No Pending Membership Inquiries</td>
                       </tr>
                     )}
                   </tbody>
@@ -264,7 +264,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
-                    <tr className="text-[9px] text-gray-500 border-b border-white/5 tracking-[0.2em] bg-black/10 uppercase font-black">
+                    <tr className="text-[9px] text-gray-500 border-b border-white/5 tracking-[0.2em] bg-black/10 font-black">
                       <th className="px-8 py-5">Circle Member</th>
                       <th className="px-8 py-5">Requested Niche</th>
                       <th className="px-8 py-5">Producer Notes</th>
@@ -287,7 +287,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                       </tr>
                     )) : (
                       <tr>
-                        <td colSpan={4} className="px-8 py-20 text-center text-gray-600 font-bold tracking-widest uppercase">No Customization Assets in Pipeline</td>
+                        <td colSpan={4} className="px-8 py-20 text-center text-gray-600 font-bold tracking-widest">No Customization Assets in Pipeline</td>
                       </tr>
                     )}
                   </tbody>
@@ -302,7 +302,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
              <div className="flex justify-between items-end">
                 <div>
                    <h1 className="text-4xl font-black tracking-tighter mb-2">Recycling Bin</h1>
-                   <p className="text-gray-500 tracking-widest text-xs font-bold uppercase">Vault Recovery & Data Purge</p>
+                   <p className="text-gray-500 tracking-widest text-xs font-bold">Vault Recovery & Data Purge</p>
                 </div>
              </div>
 
@@ -381,7 +381,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                   </div>
                </div>
                <div className="flex gap-4">
-                  <Button variant="outline" onClick={handleExportVault} className="text-xs uppercase">Export Vault</Button>
+                  <Button variant="outline" onClick={handleExportVault} className="text-xs">Export Vault</Button>
                   <input 
                     type="file" 
                     ref={fileInputRef} 
@@ -389,7 +389,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                     accept=".json" 
                     className="hidden" 
                   />
-                  <Button variant="secondary" onClick={() => fileInputRef.current?.click()} className="text-xs uppercase">Import Vault</Button>
+                  <Button variant="secondary" onClick={() => fileInputRef.current?.click()} className="text-xs">Import Vault</Button>
                </div>
             </div>
 
@@ -402,7 +402,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                   <FormInput label="Assigned Username" value={newUser.username} onChange={(v: string) => setNewUser({...newUser, username: v})} placeholder="jdoe" />
                   <FormInput label="Assigned Password" type="text" value={newUser.password} onChange={(v: string) => setNewUser({...newUser, password: v})} placeholder="••••••••" />
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-[#EAB308] tracking-widest uppercase">System Role</label>
+                    <label className="text-[10px] font-black text-[#EAB308] tracking-widest">System Role</label>
                     <select 
                       value={newUser.role}
                       onChange={(e) => setNewUser({...newUser, role: e.target.value as 'partner' | 'admin'})}
@@ -423,7 +423,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead>
-                      <tr className="text-[9px] text-gray-500 border-b border-white/5 tracking-[0.2em] bg-black/10 uppercase font-black">
+                      <tr className="text-[9px] text-gray-500 border-b border-white/5 tracking-[0.2em] bg-black/10 font-black">
                         <th className="px-8 py-5">Member Name</th>
                         <th className="px-8 py-5">Access Level</th>
                         <th className="px-8 py-5">Vault Code</th>
@@ -438,13 +438,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                             <div className="text-gray-500 text-[10px] font-mono tracking-widest">@{aff.username}</div>
                           </td>
                           <td className="px-8 py-6">
-                            <span className={`px-3 py-1 rounded-full text-[9px] font-black border uppercase tracking-widest ${aff.role === 'admin' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' : 'bg-[#EAB308]/10 text-[#EAB308] border-[#EAB308]/20'}`}>
-                              {aff.role === 'admin' ? 'EXECUTIVE' : 'MEMBER'}
+                            <span className={`px-3 py-1 rounded-full text-[9px] font-black border tracking-widest ${aff.role === 'admin' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' : 'bg-[#EAB308]/10 text-[#EAB308] border-[#EAB308]/20'}`}>
+                              {aff.role === 'admin' ? 'Executive' : 'Member'}
                             </span>
                           </td>
                           <td className="px-8 py-6 text-sm text-gray-400 font-mono">{aff.referralCode}</td>
                           <td className="px-8 py-6 text-right flex justify-end gap-4">
-                            <button onClick={() => copyToClipboard(`${baseUrl}/#/${aff.slug}`)} className="text-[10px] text-gray-500 hover:text-white font-black uppercase tracking-widest transition-colors">Copy URL</button>
+                            <button onClick={() => copyToClipboard(`${baseUrl}/#/${aff.slug}`)} className="text-[10px] text-gray-500 hover:text-white font-black tracking-widest transition-colors">Copy Link</button>
                             {aff.username !== user.username && (
                                <button onClick={() => handleDelete('affiliate', aff.id)} className="text-gray-600 hover:text-red-500 transition-colors">
                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -466,7 +466,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
             <div className="flex justify-between items-end">
                <div>
                   <h1 className="text-4xl font-black tracking-tighter mb-2">Inner Circle Dashboard</h1>
-                  <p className="text-gray-500 tracking-widest text-xs font-bold uppercase">Personal Priority Performance</p>
+                  <p className="text-gray-500 tracking-widest text-xs font-bold">Personal Priority Performance</p>
                </div>
             </div>
 
@@ -543,7 +543,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
-                    <tr className="text-[9px] text-gray-500 border-b border-white/5 tracking-[0.2em] bg-black/10 uppercase font-black">
+                    <tr className="text-[9px] text-gray-500 border-b border-white/5 tracking-[0.2em] bg-black/10 font-black">
                       <th className="px-8 py-5">Prospect Identity</th>
                       <th className="px-8 py-5">Product Target</th>
                       <th className="px-8 py-5">Status</th>
@@ -560,7 +560,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                         </td>
                         <td className="px-8 py-6 text-sm text-gray-400">{lead.productType || 'In Underwriting'}</td>
                         <td className="px-8 py-6">
-                          <span className={`px-4 py-1 rounded-full text-[9px] font-black border uppercase tracking-widest ${getStatusColor(lead.status)}`}>
+                          <span className={`px-4 py-1 rounded-full text-[9px] font-black border tracking-widest ${getStatusColor(lead.status)}`}>
                             {lead.status}
                           </span>
                         </td>
@@ -755,7 +755,7 @@ const RecycleTable = ({ title, items, onRestore, onPurge, renderRow }: any) => (
     <div className="overflow-x-auto">
       <table className="w-full text-left">
         <thead>
-          <tr className="text-[9px] text-gray-500 border-b border-white/5 tracking-[0.2em] bg-black/10 uppercase font-black">
+          <tr className="text-[9px] text-gray-500 border-b border-white/5 tracking-[0.2em] bg-black/10 font-black">
             <th className="px-8 py-5">Record Details</th>
             <th className="px-8 py-5">Member Context</th>
             <th className="px-8 py-5">Vault Timestamp</th>
@@ -833,7 +833,7 @@ const AssetItem = ({ title, content, onCopy }: { title: string, content: string,
             onClick={handleCopy} 
             className={`text-[10px] font-black tracking-widest transition-colors ${justCopied ? 'text-[#EAB308]' : 'text-gray-500 hover:text-white'}`}
           >
-            {justCopied ? 'COPIED!' : 'COPY TEXT'}
+            {justCopied ? 'Copied!' : 'Copy Text'}
           </button>
        </div>
        <div className="bg-black/50 border border-white/5 p-6 rounded-2xl font-mono text-xs text-gray-400 leading-relaxed whitespace-pre-wrap">

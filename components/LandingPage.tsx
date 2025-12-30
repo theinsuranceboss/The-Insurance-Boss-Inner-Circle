@@ -270,11 +270,11 @@ export const MultiStepForm: React.FC<{ affiliateId: string; onSuccess: () => voi
             <h2 className="text-3xl font-black tracking-tighter mb-8 text-white">Final Review</h2>
             <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-4">
               <div className="flex justify-between border-b border-white/5 pb-2">
-                <span className="text-gray-400 text-xs font-bold tracking-widest uppercase">Business</span>
+                <span className="text-gray-400 text-xs font-bold tracking-widest">Business</span>
                 <span className="font-bold text-white">{formData.businessName}</span>
               </div>
               <div className="flex justify-between border-b border-white/5 pb-2">
-                <span className="text-gray-400 text-xs font-bold tracking-widest uppercase">Contact</span>
+                <span className="text-gray-400 text-xs font-bold tracking-widest">Contact</span>
                 <span className="font-bold text-white">{formData.contactName}</span>
               </div>
             </div>
@@ -289,7 +289,7 @@ export const MultiStepForm: React.FC<{ affiliateId: string; onSuccess: () => voi
     <div className="w-full">
       <div className="mb-4 space-y-2">
         <div className="flex justify-between items-end">
-          <span className="text-[#EAB308] text-[9px] font-black uppercase tracking-[0.2em]">Step {step} of {totalSteps}</span>
+          <span className="text-[#EAB308] text-[9px] font-black tracking-[0.2em]">Step {step} of {totalSteps}</span>
           <span className="text-white text-xl font-black">{progress}%</span>
         </div>
         <div className="h-1 bg-white/10 rounded-full overflow-hidden">
@@ -303,7 +303,7 @@ export const MultiStepForm: React.FC<{ affiliateId: string; onSuccess: () => voi
         </div>
         <div className="mt-8 flex gap-4">
           {step > 1 && (
-            <button type="button" onClick={prevStep} className="px-6 py-4 rounded-2xl bg-white/5 border border-white/10 font-black uppercase text-xs tracking-widest text-gray-400 hover:bg-white/10 transition-all">Back</button>
+            <button type="button" onClick={prevStep} className="px-6 py-4 rounded-2xl bg-white/5 border border-white/10 font-black text-xs tracking-widest text-gray-400 hover:bg-white/10 transition-all">Back</button>
           )}
           {step < totalSteps ? (
             <button type="button" onClick={() => {
@@ -311,9 +311,9 @@ export const MultiStepForm: React.FC<{ affiliateId: string; onSuccess: () => voi
                else if (step === 5) setStep(7);
                else if (step === 7) setStep(8);
                else nextStep();
-            }} className="flex-1 px-6 py-4 rounded-2xl bg-[#EAB308] text-black font-black uppercase text-xs tracking-[0.2em] hover:scale-[1.01] active:scale-95 transition-all">Continue</button>
+            }} className="flex-1 px-6 py-4 rounded-2xl bg-[#EAB308] text-black font-black text-xs tracking-[0.2em] hover:scale-[1.01] active:scale-95 transition-all">Continue</button>
           ) : (
-            <button type="submit" className="flex-1 px-6 py-4 rounded-2xl bg-[#EAB308] text-black font-black uppercase text-xs tracking-[0.2em] hover:scale-[1.01] active:scale-95 transition-all">Finish Request</button>
+            <button type="submit" className="flex-1 px-6 py-4 rounded-2xl bg-[#EAB308] text-black font-black text-xs tracking-[0.2em] hover:scale-[1.01] active:scale-95 transition-all">Finish Request</button>
           )}
         </div>
       </form>
@@ -323,7 +323,7 @@ export const MultiStepForm: React.FC<{ affiliateId: string; onSuccess: () => voi
 
 export const FormInput = ({ label, ...props }: any) => (
   <div className="space-y-1">
-    <label className="block text-[9px] font-black text-[#EAB308] tracking-widest uppercase">{label}</label>
+    <label className="block text-[9px] font-black text-[#EAB308] tracking-widest">{label}</label>
     <input 
       {...props}
       className="w-full bg-black border border-white/5 rounded-xl px-4 py-3 focus:outline-none focus:border-[#EAB308] transition-all font-bold text-white placeholder:text-gray-500"

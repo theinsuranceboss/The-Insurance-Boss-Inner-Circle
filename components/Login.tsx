@@ -46,7 +46,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         <div className="text-center mb-10">
           <div className="bg-[#EAB308] text-black font-black p-4 rounded-lg inline-block text-4xl mb-6 shadow-[0_0_30px_rgba(234,179,8,0.2)]">IB</div>
           <h1 className="text-4xl font-extrabold mb-2 tracking-tighter leading-none">{heading}</h1>
-          <p className="text-gray-500 tracking-widest text-[10px] font-bold uppercase">Authorized Inner Circle Access Only</p>
+          <p className="text-gray-500 tracking-widest text-[10px] font-bold">Authorized Inner Circle Access Only</p>
         </div>
 
         <form onSubmit={handleLogin} className="bg-[#171717] border border-white/5 rounded-2xl p-8 shadow-2xl space-y-6">
@@ -57,7 +57,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           )}
           
           <div>
-            <label className="block text-xs font-bold text-gray-500 mb-2 tracking-widest uppercase">Member Identity</label>
+            <label className="block text-xs font-bold text-gray-500 mb-2 tracking-widest">Member Identity</label>
             <input 
               required
               type="text" 
@@ -69,7 +69,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-gray-500 mb-2 tracking-widest uppercase">Vault Access Key</label>
+            <label className="block text-xs font-bold text-gray-500 mb-2 tracking-widest">Vault Access Key</label>
             <input 
               required
               type="password" 
@@ -80,14 +80,14 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             />
           </div>
 
-          <Button type="submit" fullWidth className="py-4 shadow-xl uppercase tracking-widest">Synchronize & Unlock</Button>
+          <Button type="submit" fullWidth className="py-4 shadow-xl tracking-widest">Synchronize & Unlock</Button>
           
           <div className="text-center">
             <Link to="/affiliate" className="text-xs text-gray-500 hover:text-[#EAB308] transition-colors font-bold tracking-tighter">Inquire for Inner Circle Access</Link>
           </div>
         </form>
 
-        <p className="text-center mt-10 text-[10px] text-gray-600 tracking-[0.3em] font-black uppercase">
+        <p className="text-center mt-10 text-[10px] text-gray-600 tracking-[0.3em] font-black">
           Official Insurance Boss Executive Network
         </p>
       </div>
