@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../services/dbService';
 import { Affiliate, Lead, LeadStatus } from '../types';
@@ -98,6 +99,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [vaultNiche, setVaultNiche] = useState('Medical & Healthcare Elite');
   const [vaultNotes, setVaultNotes] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [viewRecycleBin, setViewRecycleBin] = useState(false);
 
   const baseUrl = window.location.origin;
   const referralLink = `${baseUrl}/#/${user.slug}`;
@@ -146,8 +148,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   };
 
   const handleDeleteLead = (leadId: string) => {
-    if (confirm("Permanently remove this prospect from your vault?")) {
-      db.deleteEntry('lead', leadId);
+    // Immediate silent move to trash for high-performance feel
+    db.deleteEntry('lead', leadId);
+    updateData();
+  };
+
+  const handleRestoreLead = (leadId: string) => {
+    db.restoreEntry('lead', leadId);
+    updateData();
+    alert("Prospect restored to primary vault.");
+  };
+
+  const handlePurgeLead = (leadId: string) => {
+    if (confirm("This will permanently erase the lead record from the vault. Continue?")) {
+      db.purgeEntry('lead', leadId);
       updateData();
     }
   };
@@ -178,7 +192,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   ];
 
   const filteredLeads = (isAdmin ? globalLeads : leads).filter(l => 
-    !l.isDeleted && (
+    (viewRecycleBin ? l.isDeleted : !l.isDeleted) && (
       l.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       l.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       l.details?.businessName?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -294,7 +308,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                     </div>
                     <div className="flex justify-between items-center pb-4">
                       <span className="text-gray-400 font-bold text-sm">Next Payout Date</span>
-                      <span className="text-white font-black text-xl tracking-tight uppercase">June 1, 2024</span>
+                      <span className="text-white font-black text-xl tracking-tight uppercase">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
                     </div>
                   </div>
                 </div>
@@ -325,17 +339,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex flex-col md:flex-row justify-between items-end gap-6">
               <div>
-                <h1 className="text-5xl font-black tracking-tighter mb-2 text-white uppercase">{isAdmin ? 'Global Lead Vault' : 'Your Lead Vault'}</h1>
-                <p className="text-gray-500 tracking-widest text-[10px] font-black uppercase">Live Underwriting Transmission Feed</p>
+                <h1 className="text-5xl font-black tracking-tighter mb-2 text-white uppercase">
+                  {viewRecycleBin ? 'Leads Recycle Bin' : (isAdmin ? 'Global Lead Vault' : 'Your Lead Vault')}
+                </h1>
+                <p className="text-gray-500 tracking-widest text-[10px] font-black uppercase">
+                  {viewRecycleBin ? 'DELETED RECORDS PENDING PURGE' : 'Live Underwriting Transmission Feed'}
+                </p>
               </div>
-              <div className="w-full md:w-96 relative">
-                <input type="text" placeholder="Search prospects..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-[#111] border border-white/5 rounded-2xl px-12 py-4 focus:outline-none focus:border-[#EAB308] transition-all text-sm font-bold placeholder:text-gray-700" />
-                <svg className="w-5 h-5 absolute left-4 top-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              <div className="flex gap-4 items-center">
+                <button 
+                  onClick={() => setViewRecycleBin(!viewRecycleBin)}
+                  className={`px-5 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all border ${viewRecycleBin ? 'bg-[#EAB308] text-black border-[#EAB308]' : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'}`}
+                >
+                  {viewRecycleBin ? 'Back To Vault' : 'Recycle Bin'}
+                </button>
+                <div className="w-full md:w-96 relative">
+                  <input type="text" placeholder="Search prospects..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-[#111] border border-white/5 rounded-2xl px-12 py-4 focus:outline-none focus:border-[#EAB308] transition-all text-sm font-bold placeholder:text-gray-700" />
+                  <svg className="w-5 h-5 absolute left-4 top-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                </div>
               </div>
             </div>
-            <div className="bg-[#111] border border-white/5 rounded-[40px] overflow-hidden shadow-2xl">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+            <div className="bg-[#111] border border-white/5 rounded-[40px] shadow-2xl overflow-visible min-h-[600px] mb-20">
+              <div className="overflow-visible">
+                <table className="w-full text-left border-collapse table-auto">
                   <thead>
                     <tr className="border-b border-white/5 bg-white/[0.02]">
                       <th className="px-8 py-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Prospect Details</th>
@@ -353,11 +379,35 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                           <td className="px-8 py-6"><div className="text-sm font-bold text-gray-400">{lead.productType || 'Underwriting Review'}</div>{lead.details?.businessTypes && lead.details.businessTypes.length > 0 && (<div className="inline-block mt-2 px-3 py-1 bg-white/5 rounded-lg border border-white/5 text-[9px] text-[#EAB308] font-black uppercase tracking-tighter">{lead.details.businessTypes[0]}</div>)}</td>
                           <td className="px-8 py-6"><StatusDropdown value={lead.status} onChange={(s) => handleUpdateStatus(lead.id, s)} /></td>
                           <td className="px-8 py-6"><div className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{new Date(lead.createdAt).toLocaleDateString()}</div></td>
-                          <td className="px-8 py-6 text-right"><div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => alert(JSON.stringify(lead.details, null, 2))} className="p-2 bg-white/5 rounded-lg text-gray-400 hover:text-white transition-colors" title="View Details"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg></button><button onClick={() => handleDeleteLead(lead.id)} className="p-2 bg-red-500/10 rounded-lg text-red-500 hover:bg-red-500 hover:text-white transition-all" title="Delete Prospect"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button></div></td>
+                          <td className="px-8 py-6 text-right">
+                            <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                              {viewRecycleBin ? (
+                                <div className="flex gap-2">
+                                  <button onClick={() => handleRestoreLead(lead.id)} className="p-2 bg-green-500/10 rounded-lg text-green-500 hover:bg-green-500 hover:text-white transition-all flex items-center gap-2 group/restore" title="Restore Lead">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    <span className="text-[8px] font-black uppercase tracking-widest pr-1">Restore</span>
+                                  </button>
+                                  <button onClick={() => handlePurgeLead(lead.id)} className="p-2 bg-red-500/20 rounded-lg text-red-500 hover:bg-red-500 hover:text-white transition-all" title="Purge Lead Permanently">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              ) : (
+                                <button onClick={() => handleDeleteLead(lead.id)} className="p-2 bg-red-500/10 rounded-lg text-red-500 hover:bg-red-500 hover:text-white transition-all" title="Move to Trash">
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                       ))
                     ) : (
-                      <tr><td colSpan={5} className="px-8 py-20 text-center"><div className="text-gray-600 font-black text-xs uppercase tracking-[0.3em]">No matching records in the vault.</div></td></tr>
+                      <tr><td colSpan={5} className="px-8 py-20 text-center"><div className="text-gray-600 font-black text-xs uppercase tracking-[0.3em]">No matching records in the {viewRecycleBin ? 'recycle bin' : 'vault'}.</div></td></tr>
                     )}
                   </tbody>
                 </table>
@@ -507,7 +557,7 @@ const DashboardForm = ({ affiliateId }: { affiliateId: string }) => {
     else setStep(s => Math.max(s - 1, 1));
   };
 
-  const industries = ["Construction", "Real Estate", "Healthcare", "Professional Services", "Cyber", "Finance", "Manufacturing", "Legal", "Wholesale", "Automotive", "Logistics", "Retail"];
+  const industries = ["Construction", "Real Estate", "Healthcare", "Professional Services", "Cyber", "Finance", "Manufacturing", "Legal", "Wholesale", "Automotive", "Logistics", "Retail", "Food & Beverage", "Other"];
 
   const toggleBusinessType = (type: string) => {
     setFormData(prev => ({
@@ -663,8 +713,8 @@ const ToggleRow = ({ label, value, onChange }: any) => (
   <div className="flex items-center justify-between bg-black/30 border border-white/10 p-6 rounded-2xl">
     <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{label}</span>
     <div className="flex bg-black p-1 rounded-lg">
-      <button onClick={() => onChange(true)} className={`px-5 py-2 rounded-md text-[10px] font-black transition-all ${value ? 'bg-[#EAB308] text-black shadow-lg' : 'text-gray-600 hover:text-gray-400'}`}>Yes</button>
-      <button onClick={() => onChange(false)} className={`px-5 py-2 rounded-md text-[10px] font-black transition-all ${!value ? 'bg-[#EAB308] text-black shadow-lg' : 'text-gray-600 hover:text-gray-400'}`}>No</button>
+      <button onClick={() => onChange(true)} className={`px-4 py-1 rounded text-[10px] font-black transition-all ${value ? 'bg-[#EAB308] text-black shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}>Yes</button>
+      <button onClick={() => onChange(false)} className={`px-4 py-1 rounded text-[10px] font-black transition-all ${!value ? 'bg-[#EAB308] text-black shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}>No</button>
     </div>
   </div>
 );

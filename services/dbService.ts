@@ -15,7 +15,7 @@ class DBService {
   private loadData() {
     try {
       const savedAffiliates = localStorage.getItem('boss_affiliates');
-      if (savedAffiliates && savedAffiliates !== '[]') {
+      if (savedAffiliates !== null) {
         this.affiliates = JSON.parse(savedAffiliates);
       } else {
         this.affiliates = [...MOCK_AFFILIATES];
@@ -23,7 +23,7 @@ class DBService {
       }
 
       const savedLeads = localStorage.getItem('boss_leads');
-      if (savedLeads && savedLeads !== '[]') {
+      if (savedLeads !== null) {
         this.leads = JSON.parse(savedLeads);
       } else {
         this.leads = [...MOCK_LEADS];
@@ -31,14 +31,14 @@ class DBService {
       }
 
       const savedApps = localStorage.getItem('boss_partner_apps');
-      if (savedApps) {
+      if (savedApps !== null) {
         this.applications = JSON.parse(savedApps);
       } else {
         this.applications = [];
       }
 
       const savedLandingReqs = localStorage.getItem('boss_landing_reqs');
-      if (savedLandingReqs) {
+      if (savedLandingReqs !== null) {
         this.landingPageRequests = JSON.parse(savedLandingReqs);
       } else {
         this.landingPageRequests = [];
@@ -184,7 +184,7 @@ class DBService {
   }
 
   deleteEntry(type: 'lead' | 'application' | 'landing_request' | 'affiliate', id: string) {
-    this.loadData(); // Sync with disk before mutation
+    this.loadData(); 
     const now = new Date().toISOString();
     switch(type) {
       case 'lead':
@@ -211,7 +211,7 @@ class DBService {
   }
 
   restoreEntry(type: 'lead' | 'application' | 'landing_request' | 'affiliate', id: string) {
-    this.loadData(); // Sync with disk
+    this.loadData();
     switch(type) {
       case 'lead':
         const lead = this.leads.find(l => l.id === id);
@@ -237,7 +237,7 @@ class DBService {
   }
 
   purgeEntry(type: 'lead' | 'application' | 'landing_request' | 'affiliate', id: string) {
-    this.loadData(); // Sync with disk
+    this.loadData();
     switch(type) {
       case 'lead':
         this.leads = this.leads.filter(l => l.id !== id);
