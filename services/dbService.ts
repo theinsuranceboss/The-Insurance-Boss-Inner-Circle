@@ -109,6 +109,20 @@ class DBService {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
+  getGlobalLeads(includeDeleted = false): Lead[] {
+    this.loadData();
+    return includeDeleted ? this.leads : this.leads.filter(l => !l.isDeleted);
+  }
+
+  updateLeadStatus(leadId: string, status: LeadStatus): void {
+    this.loadData();
+    const lead = this.leads.find(l => l.id === leadId);
+    if (lead) {
+      lead.status = status;
+      this.saveLeads();
+    }
+  }
+
   addLead(affiliateId: string, name: string, email: string, phone: string, details?: Lead['details']): Lead {
     const newLead: Lead = {
       id: `lead-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,

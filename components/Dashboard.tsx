@@ -1,67 +1,114 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../services/dbService';
-import { Affiliate, Lead, LeadStatus, PartnerApplication, LandingPageRequest } from '../types';
+import { Affiliate, Lead, LeadStatus } from '../types';
 import { Button } from './Button';
-import { MultiStepForm, FormInput } from './LandingPage';
-import { PromotionPage } from './PromotionPage';
 
 interface DashboardProps {
   user: Affiliate;
   onLogout: () => void;
 }
 
-type Tab = 'overview' | 'leads' | 'applications' | 'landing_requests' | 'payouts' | 'tools' | 'program' | 'affiliate_manager' | 'recycle_bin';
+type Tab = 'overview' | 'leads' | 'payouts' | 'tools' | 'lead_management' | 'applications' | 'landing_requests';
+
+const StatusDropdown = ({ value, onChange, disabled = false }: { value: LeadStatus, onChange: (s: LeadStatus) => void, disabled?: boolean }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const getStatusColor = (s: LeadStatus) => {
+    switch (s) {
+      case LeadStatus.BOUND: return 'bg-green-500/10 text-green-500 border-green-500/20';
+      case LeadStatus.RECEIVED: return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
+      case LeadStatus.IN_PROGRESS: return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
+      case LeadStatus.QUOTED: return 'bg-purple-500/10 text-purple-500 border-purple-500/20';
+      case LeadStatus.REJECTED: return 'bg-red-500/10 text-red-500 border-red-500/20';
+      case LeadStatus.BOUNCED: return 'bg-orange-500/10 text-orange-500 border-orange-500/20';
+      default: return 'bg-gray-500/10 text-gray-500 border-gray-500/20';
+    }
+  };
+
+  return (
+    <div className="relative inline-block" ref={containerRef}>
+      <button
+        disabled={disabled}
+        onClick={() => setIsOpen(!isOpen)}
+        className={`flex items-center gap-3 border px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all outline-none ${getStatusColor(value)} ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-125'}`}
+      >
+        {value}
+        {!disabled && (
+          <svg className={`w-3 h-3 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" />
+          </svg>
+        )}
+      </button>
+      
+      {isOpen && !disabled && (
+        <div className="absolute left-0 mt-2 w-48 bg-[#111] border border-white/10 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+          {(Object.values(LeadStatus) as LeadStatus[]).map((status) => (
+            <div
+              key={status}
+              onClick={() => {
+                onChange(status);
+                setIsOpen(false);
+              }}
+              className={`px-5 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer transition-colors border-b border-white/5 last:border-none ${value === status ? 'bg-[#EAB308] text-black' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
+            >
+              {status}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const Modal = ({ title, onClose, children }: { title: string, onClose: () => void, children?: React.ReactNode }) => (
+  <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={onClose} />
+    <div className="relative bg-[#111] border border-white/10 w-full max-w-3xl rounded-[40px] shadow-[0_50px_100px_rgba(0,0,0,1)] overflow-hidden animate-in zoom-in-95 duration-300">
+      <div className="flex justify-between items-center p-8 border-b border-white/5">
+        <h3 className="text-2xl font-black tracking-tighter text-white uppercase">{title}</h3>
+        <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div className="p-8 max-h-[70vh] overflow-y-auto no-scrollbar">
+        {children}
+      </div>
+    </div>
+  </div>
+);
 
 export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [applications, setApplications] = useState<PartnerApplication[]>([]);
-  const [landingRequests, setLandingRequests] = useState<LandingPageRequest[]>([]);
-  const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
-  
-  const [deletedLeads, setDeletedLeads] = useState<Lead[]>([]);
-  const [deletedApps, setDeletedApps] = useState<PartnerApplication[]>([]);
-  const [deletedLandingReqs, setDeletedLandingReqs] = useState<LandingPageRequest[]>([]);
-  const [deletedAffiliates, setDeletedAffiliates] = useState<Affiliate[]>([]);
+  const [globalLeads, setGlobalLeads] = useState<Lead[]>([]);
+  const [activeTab, setActiveTab] = useState<Tab>(user.role === 'admin' ? 'lead_management' : 'overview');
+  const [activeToolModal, setActiveToolModal] = useState<'email' | 'digital' | 'sms' | 'vault' | null>(null);
+  const [vaultNiche, setVaultNiche] = useState('Medical & Healthcare Elite');
+  const [vaultNotes, setVaultNotes] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
-  const [activeTab, setActiveTab] = useState<Tab>(user.role === 'admin' ? 'applications' : 'overview');
-  const [copySuccess, setCopySuccess] = useState(false);
-  const [formSubmitted, setFormSubmitted] = useState(false);
-  const [selectedAsset, setSelectedAsset] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // Customization form state
-  const [customNiche, setCustomNiche] = useState('Medical & Healthcare');
-  const [customNotes, setCustomNotes] = useState('');
-
-  // User Manager state
-  const [newUser, setNewUser] = useState({
-    name: '',
-    email: '',
-    username: '',
-    password: '',
-    role: 'partner' as 'partner' | 'admin'
-  });
-  
   const baseUrl = window.location.origin;
   const referralLink = `${baseUrl}/#/${user.slug}`;
 
   const updateData = useCallback(() => {
     if (user.role === 'admin') {
-      const allApps = db.getApplications(true);
-      const allLand = db.getLandingPageRequests(true);
-      const allAff = db.getAffiliates(true);
-
-      setApplications(allApps.filter(a => !a.isDeleted));
-      setLandingRequests(allLand.filter(r => !r.isDeleted));
-      setAffiliates(allAff.filter(a => !a.isDeleted));
-      
-      setDeletedApps(allApps.filter(a => a.isDeleted));
-      setDeletedLandingReqs(allLand.filter(r => r.isDeleted));
-      setDeletedAffiliates(allAff.filter(a => a.isDeleted));
+      const allLeads = db.getGlobalLeads(true);
+      setGlobalLeads(allLeads);
     } else {
       const allLeads = db.getLeadsForAffiliate(user.id, true);
-      setLeads(allLeads.filter(l => !l.isDeleted));
-      setDeletedLeads(allLeads.filter(l => l.isDeleted));
+      setLeads(allLeads);
     }
   }, [user.id, user.role]);
 
@@ -71,127 +118,97 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     return () => clearInterval(interval);
   }, [updateData]);
 
-  const copyToClipboard = async (text: string = referralLink) => {
+  const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      setCopySuccess(true);
-      setTimeout(() => setCopySuccess(false), 2000);
+      alert('Content copied to clipboard!');
     } catch (err) {
-      console.error('Failed to copy link:', err);
+      console.error('Failed to copy:', err);
     }
   };
 
-  const handleCustomizationSubmit = () => {
+  const handleVaultRequest = () => {
+    if (!vaultNotes) return alert("Please provide executive briefing notes.");
     db.submitLandingPageRequest({
       affiliateId: user.id,
       affiliateName: user.name,
-      niche: customNiche,
-      notes: customNotes
+      niche: vaultNiche,
+      notes: vaultNotes
     });
-    setSelectedAsset(null);
-    setCustomNotes('');
-    alert('Customization Request Logged!');
+    alert("Request dispatched to executive marketing desk!");
+    setActiveToolModal(null);
+    setVaultNotes('');
+  };
+
+  const handleUpdateStatus = (leadId: string, status: LeadStatus) => {
+    db.updateLeadStatus(leadId, status);
     updateData();
   };
 
-  const handleCreateUser = (e: React.FormEvent) => {
-    e.preventDefault();
-    db.createAffiliate(newUser);
-    updateData();
-    setNewUser({ name: '', email: '', username: '', password: '', role: 'partner' });
-    alert('Inner Circle Member Provisioned Successfully.');
-  };
-
-  const handleDelete = (type: 'lead' | 'application' | 'landing_request' | 'affiliate', id: string) => {
-    if(confirm('Move this entry to the Recycling Bin?')) {
-      db.deleteEntry(type, id);
+  const handleDeleteLead = (leadId: string) => {
+    if (confirm("Permanently remove this prospect from your vault?")) {
+      db.deleteEntry('lead', leadId);
       updateData();
-    }
-  };
-
-  const handleRestore = (type: 'lead' | 'application' | 'landing_request' | 'affiliate', id: string) => {
-    db.restoreEntry(type, id);
-    alert('Entry restored to active database.');
-    updateData();
-  };
-
-  const handlePurge = (type: 'lead' | 'application' | 'landing_request' | 'affiliate', id: string) => {
-    if(confirm('Permanent action: This will be deleted from the vault forever. Purge now?')) {
-      db.purgeEntry(type, id);
-      updateData();
-    }
-  };
-
-  const handleExportVault = () => {
-    const data = db.exportVault();
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `InsuranceBoss_InnerCircle_Backup_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImportVault = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      const success = db.importVault(content);
-      if (success) {
-        alert("Vault Re-Synchronized Successfully. Reloading...");
-        window.location.reload();
-      } else {
-        alert("Error: Invalid Vault Data Package.");
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const activePolicies = leads.filter(l => l.status === LeadStatus.ACTIVE || l.status === LeadStatus.BOUND).length;
-  const lifetimeEarnings = user.lifetimeEarnings || 0;
-  const monthlyResiduals = user.monthlyResiduals || 0;
-
-  const getStatusColor = (status: LeadStatus) => {
-    switch (status) {
-      case LeadStatus.ACTIVE: return 'bg-green-500/10 text-green-500 border-green-500/20';
-      case LeadStatus.BOUND: return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
-      case LeadStatus.QUOTED: return 'bg-[#EAB308]/10 text-[#EAB308] border-[#EAB308]/20';
-      default: return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
     }
   };
 
   const isAdmin = user.role === 'admin';
 
+  const toolAssets = [
+    {
+      title: "Priority Email Scripts",
+      description: "High-conversion templates for Inner Circle member networking.",
+      action: () => setActiveToolModal('email')
+    },
+    {
+      title: "Inner Circle Digital Assets",
+      description: "Exclusive pre-branded PDFs for prioritized client distribution.",
+      action: () => setActiveToolModal('digital')
+    },
+    {
+      title: "Elite SMS Templates",
+      description: "Quick priority snippets for member referral distribution.",
+      action: () => setActiveToolModal('sms')
+    },
+    {
+      title: "Custom Vault Generator",
+      description: "Request a specialized landing page from our marketing producers.",
+      action: () => setActiveToolModal('vault')
+    }
+  ];
+
+  const filteredLeads = (isAdmin ? globalLeads : leads).filter(l => 
+    !l.isDeleted && (
+      l.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      l.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      l.details?.businessName?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  );
+
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
-      <nav className="border-b border-white/5 bg-[#171717]/80 px-6 py-4 flex justify-between items-center sticky top-0 z-50 backdrop-blur-md">
+    <div className="min-h-screen bg-[#0a0a0a] text-white selection:bg-[#EAB308] selection:text-black">
+      <nav className="border-b border-white/5 bg-[#111]/80 px-6 py-4 flex justify-between items-center sticky top-0 z-50 backdrop-blur-md">
         <div className="flex items-center gap-8">
           <div className="bg-[#EAB308] text-black font-black p-2 rounded text-lg leading-none">IB</div>
           <div className="hidden md:flex items-center gap-6">
             {!isAdmin ? (
-              (['overview', 'leads', 'payouts', 'tools', 'program', 'recycle_bin'] as Tab[]).map((tab) => (
+              (['overview', 'leads', 'payouts', 'tools'] as Tab[]).map((tab) => (
                 <button 
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`text-sm font-bold tracking-widest transition-colors ${activeTab === tab ? 'text-[#EAB308]' : 'text-gray-500 hover:text-white'}`}
+                  className={`text-[10px] font-black tracking-widest uppercase transition-colors ${activeTab === tab ? 'text-[#EAB308]' : 'text-gray-500 hover:text-white'}`}
                 >
-                  {tab === 'leads' ? 'Lead Vault' : tab === 'recycle_bin' ? 'Recycling Bin' : tab === 'payouts' ? 'Earnings' : tab === 'tools' ? 'Inner Circle Tools' : tab === 'program' ? 'Inner Circle Info' : tab.charAt(0).toUpperCase() + tab.slice(1).replace('_', ' ')}
+                  {tab === 'leads' ? 'Lead Vault' : tab === 'payouts' ? 'Earnings' : tab === 'tools' ? 'Tools' : tab}
                 </button>
               ))
             ) : (
-              (['applications', 'landing_requests', 'affiliate_manager', 'recycle_bin'] as Tab[]).map((tab) => (
+              (['lead_management', 'applications', 'landing_requests'] as Tab[]).map((tab) => (
                 <button 
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`text-sm font-bold tracking-widest transition-colors ${activeTab === tab ? 'text-[#EAB308]' : 'text-gray-500 hover:text-white'}`}
+                  className={`text-[10px] font-black tracking-widest uppercase transition-colors ${activeTab === tab ? 'text-[#EAB308]' : 'text-gray-500 hover:text-white'}`}
                 >
-                  {tab === 'applications' ? 'Membership Inquiries' : tab === 'landing_requests' ? 'Landing Requests' : tab === 'recycle_bin' ? 'Recycling Bin' : 'Circle Member Manager'}
+                  {tab === 'lead_management' ? 'Global Vault' : tab === 'applications' ? 'Inquiries' : 'Vault Requests'}
                 </button>
               ))
             )}
@@ -199,385 +216,148 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         </div>
         <div className="flex items-center gap-6">
           <div className="hidden lg:block text-right">
-            <div className="text-[9px] text-gray-500 font-black tracking-widest">{isAdmin ? 'Executive Desk' : 'Inner Circle Member'}</div>
+            <div className="text-[9px] text-gray-500 font-black tracking-widest uppercase">{isAdmin ? 'Executive Desk' : 'Commercial Partner'}</div>
             <div className="text-sm font-bold">{user.name}</div>
           </div>
-          <button onClick={onLogout} className="text-[10px] bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg transition-colors border border-white/10 font-black tracking-widest">Logout</button>
+          <button onClick={onLogout} className="text-[10px] bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg transition-colors border border-white/10 font-black tracking-widest uppercase">Logout</button>
         </div>
       </nav>
 
       <main className="max-w-7xl mx-auto px-6 py-10">
-        {isAdmin && activeTab === 'applications' && (
-          <div className="space-y-10 animate-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-[#171717] rounded-3xl border border-white/5 overflow-hidden shadow-2xl">
-              <div className="p-8 border-b border-white/5 flex justify-between items-center bg-black/20">
-                <h2 className="text-2xl font-black tracking-tighter">Inner Circle Membership Inquiries</h2>
-                <div className="text-xs text-[#EAB308] font-black tracking-widest">Prospect Intake</div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="text-[9px] text-gray-500 border-b border-white/5 tracking-[0.2em] bg-black/10 font-black">
-                      <th className="px-8 py-5">Prospect Details</th>
-                      <th className="px-8 py-5">Business Context</th>
-                      <th className="px-8 py-5">Industry</th>
-                      <th className="px-8 py-5">Volume</th>
-                      <th className="px-8 py-5 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5 font-bold">
-                    {applications.length > 0 ? applications.map(app => (
-                      <tr key={app.id} className="hover:bg-white/[0.02] transition-colors">
-                        <td className="px-8 py-6">
-                           <div className="text-white text-lg">{app.fullName}</div>
-                           <div className="text-gray-600 text-[10px] font-mono">{app.email}</div>
-                        </td>
-                        <td className="px-8 py-6 text-sm text-gray-400">{app.businessName}</td>
-                        <td className="px-8 py-6 text-sm text-[#EAB308] tracking-wider">{app.industry}</td>
-                        <td className="px-8 py-6 text-white font-black">{app.avgReferrals}</td>
-                        <td className="px-8 py-6 text-right">
-                          <button onClick={() => handleDelete('application', app.id)} className="p-2 text-gray-500 hover:text-red-500 transition-colors">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                          </button>
-                        </td>
-                      </tr>
-                    )) : (
-                      <tr>
-                        <td colSpan={5} className="px-8 py-20 text-center text-gray-600 font-bold tracking-widest">No Pending Membership Inquiries</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {isAdmin && activeTab === 'landing_requests' && (
-          <div className="animate-in slide-in-from-bottom-4 duration-500">
-             <div className="bg-[#171717] rounded-3xl border border-white/5 overflow-hidden shadow-2xl">
-              <div className="p-8 border-b border-white/5 flex justify-between items-center bg-black/20">
-                <h2 className="text-2xl font-black tracking-tighter">Inner Circle Customization Pipeline</h2>
-                <div className="text-xs text-[#EAB308] font-black tracking-widest">Asset Production</div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="text-[9px] text-gray-500 border-b border-white/5 tracking-[0.2em] bg-black/10 font-black">
-                      <th className="px-8 py-5">Circle Member</th>
-                      <th className="px-8 py-5">Requested Niche</th>
-                      <th className="px-8 py-5">Producer Notes</th>
-                      <th className="px-8 py-5 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5 font-bold">
-                    {landingRequests.length > 0 ? landingRequests.map(req => (
-                      <tr key={req.id} className="hover:bg-white/[0.02] transition-colors">
-                        <td className="px-8 py-6">
-                           <div className="text-white text-lg">{req.affiliateName}</div>
-                        </td>
-                        <td className="px-8 py-6 text-sm text-[#EAB308] tracking-wider">{req.niche}</td>
-                        <td className="px-8 py-6 text-sm text-gray-400 max-w-md truncate">{req.notes || 'None'}</td>
-                        <td className="px-8 py-6 text-right">
-                          <button onClick={() => handleDelete('landing_request', req.id)} className="p-2 text-gray-500 hover:text-red-500 transition-colors">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                          </button>
-                        </td>
-                      </tr>
-                    )) : (
-                      <tr>
-                        <td colSpan={4} className="px-8 py-20 text-center text-gray-600 font-bold tracking-widest">No Customization Assets in Pipeline</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'recycle_bin' && (
-          <div className="space-y-12 animate-in fade-in duration-500">
-             <div className="flex justify-between items-end">
-                <div>
-                   <h1 className="text-4xl font-black tracking-tighter mb-2">Recycling Bin</h1>
-                   <p className="text-gray-500 tracking-widest text-xs font-bold">Vault Recovery & Data Purge</p>
-                </div>
-             </div>
-
-             <div className="space-y-10">
-                {isAdmin ? (
-                  <>
-                    <RecycleTable 
-                      title="Deleted Membership Inquiries" 
-                      items={deletedApps} 
-                      onRestore={(id: string) => handleRestore('application', id)} 
-                      onPurge={(id: string) => handlePurge('application', id)}
-                      renderRow={(app: any) => (
-                        <>
-                          <td className="px-8 py-6"><div className="text-white">{app.fullName}</div><div className="text-[10px] text-gray-500 font-mono">{app.email}</div></td>
-                          <td className="px-8 py-6 text-gray-400 text-sm">{app.businessName}</td>
-                          <td className="px-8 py-6 text-[#EAB308] text-xs font-black tracking-widest">{app.industry}</td>
-                        </>
-                      )}
-                    />
-                    <RecycleTable 
-                      title="Deleted Landing Assets" 
-                      items={deletedLandingReqs} 
-                      onRestore={(id: string) => handleRestore('landing_request', id)} 
-                      onPurge={(id: string) => handlePurge('landing_request', id)}
-                      renderRow={(req: any) => (
-                        <>
-                          <td className="px-8 py-6 text-white">{req.affiliateName}</td>
-                          <td className="px-8 py-6 text-[#EAB308] text-xs font-black tracking-widest">{req.niche}</td>
-                          <td className="px-8 py-6 text-gray-500 text-sm italic">"{req.notes}"</td>
-                        </>
-                      )}
-                    />
-                    <RecycleTable 
-                      title="Deleted Inner Circle Members" 
-                      items={deletedAffiliates} 
-                      onRestore={(id: string) => handleRestore('affiliate', id)} 
-                      onPurge={(id: string) => handlePurge('affiliate', id)}
-                      renderRow={(aff: any) => (
-                        <>
-                          <td className="px-8 py-6 text-white">{aff.name}</td>
-                          <td className="px-8 py-6 text-gray-400 text-xs font-mono">@{aff.username}</td>
-                          <td className="px-8 py-6 text-gray-500 text-xs">{aff.referralCode}</td>
-                        </>
-                      )}
-                    />
-                  </>
-                ) : (
-                  <RecycleTable 
-                    title="Deleted Lead Transactions" 
-                    items={deletedLeads} 
-                    onRestore={(id: string) => handleRestore('lead', id)} 
-                    onPurge={(id: string) => handlePurge('lead', id)}
-                    renderRow={(lead: any) => (
-                      <>
-                        <td className="px-8 py-6 text-white">{lead.name}</td>
-                        <td className="px-8 py-6 text-gray-400 text-sm">{lead.productType}</td>
-                        <td className="px-8 py-6 text-gray-500 text-xs">{new Date(lead.createdAt).toLocaleDateString()}</td>
-                      </>
-                    )}
-                  />
-                )}
-             </div>
-          </div>
-        )}
-
-        {isAdmin && activeTab === 'affiliate_manager' && (
-          <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-[#111] p-8 rounded-3xl border-2 border-dashed border-[#EAB308]/20 flex flex-col md:flex-row items-center justify-between gap-8">
-               <div className="flex items-center gap-6">
-                  <div className="bg-[#EAB308]/10 p-4 rounded-2xl">
-                    <svg className="w-8 h-8 text-[#EAB308]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-black tracking-tight">Vault Synchronization Tool</h3>
-                    <p className="text-sm text-gray-500 font-bold">Backup or sync the entire Insurance Boss Inner Circle database package.</p>
-                  </div>
-               </div>
-               <div className="flex gap-4">
-                  <Button variant="outline" onClick={handleExportVault} className="text-xs">Export Vault</Button>
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    onChange={handleImportVault} 
-                    accept=".json" 
-                    className="hidden" 
-                  />
-                  <Button variant="secondary" onClick={() => fileInputRef.current?.click()} className="text-xs">Import Vault</Button>
-               </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-1 bg-[#171717] p-8 rounded-3xl border border-white/5 shadow-2xl">
-                <h3 className="text-2xl font-black tracking-tighter mb-6">Provision New Member</h3>
-                <form onSubmit={handleCreateUser} className="space-y-4">
-                  <FormInput label="Full Name" value={newUser.name} onChange={(v: string) => setNewUser({...newUser, name: v})} placeholder="e.g. John Doe" />
-                  <FormInput label="Email Address" type="email" value={newUser.email} onChange={(v: string) => setNewUser({...newUser, email: v})} placeholder="john@example.com" />
-                  <FormInput label="Assigned Username" value={newUser.username} onChange={(v: string) => setNewUser({...newUser, username: v})} placeholder="jdoe" />
-                  <FormInput label="Assigned Password" type="text" value={newUser.password} onChange={(v: string) => setNewUser({...newUser, password: v})} placeholder="••••••••" />
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-[#EAB308] tracking-widest">System Role</label>
-                    <select 
-                      value={newUser.role}
-                      onChange={(e) => setNewUser({...newUser, role: e.target.value as 'partner' | 'admin'})}
-                      className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 font-bold text-white appearance-none"
-                    >
-                        <option value="partner">Inner Circle Member</option>
-                        <option value="admin">Executive Desk</option>
-                    </select>
-                  </div>
-                  <Button fullWidth type="submit" className="mt-4">Authorize Member</Button>
-                </form>
-              </div>
-
-              <div className="lg:col-span-2 bg-[#171717] rounded-3xl border border-white/5 overflow-hidden shadow-2xl">
-                <div className="p-8 border-b border-white/5 flex justify-between items-center bg-black/20">
-                    <h2 className="text-2xl font-black tracking-tighter">Inner Circle Roll Call</h2>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="text-[9px] text-gray-500 border-b border-white/5 tracking-[0.2em] bg-black/10 font-black">
-                        <th className="px-8 py-5">Member Name</th>
-                        <th className="px-8 py-5">Access Level</th>
-                        <th className="px-8 py-5">Vault Code</th>
-                        <th className="px-8 py-5 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5 font-bold">
-                      {affiliates.map(aff => (
-                        <tr key={aff.id} className="hover:bg-white/[0.02] transition-colors">
-                          <td className="px-8 py-6">
-                            <div className="text-white text-base">{aff.name}</div>
-                            <div className="text-gray-500 text-[10px] font-mono tracking-widest">@{aff.username}</div>
-                          </td>
-                          <td className="px-8 py-6">
-                            <span className={`px-3 py-1 rounded-full text-[9px] font-black border tracking-widest ${aff.role === 'admin' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' : 'bg-[#EAB308]/10 text-[#EAB308] border-[#EAB308]/20'}`}>
-                              {aff.role === 'admin' ? 'Executive' : 'Member'}
-                            </span>
-                          </td>
-                          <td className="px-8 py-6 text-sm text-gray-400 font-mono">{aff.referralCode}</td>
-                          <td className="px-8 py-6 text-right flex justify-end gap-4">
-                            <button onClick={() => copyToClipboard(`${baseUrl}/#/${aff.slug}`)} className="text-[10px] text-gray-500 hover:text-white font-black tracking-widest transition-colors">Copy Link</button>
-                            {aff.username !== user.username && (
-                               <button onClick={() => handleDelete('affiliate', aff.id)} className="text-gray-600 hover:text-red-500 transition-colors">
-                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                               </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
+        
+        {/* OVERVIEW TAB */}
         {!isAdmin && activeTab === 'overview' && (
-          <div className="space-y-10 animate-in fade-in duration-500">
-            <div className="flex justify-between items-end">
-               <div>
-                  <h1 className="text-4xl font-black tracking-tighter mb-2">Inner Circle Dashboard</h1>
-                  <p className="text-gray-500 tracking-widest text-xs font-bold">Personal Priority Performance</p>
-               </div>
+          <div className="space-y-12 animate-in fade-in duration-500">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <StatCard label="Active Portfolio" value={leads.filter(l => l.status === LeadStatus.BOUND).length} color="#3b82f6" />
+              <StatCard label="Monthly Residuals" value={`$${user.monthlyResiduals || 0}`} color="#EAB308" />
+              <StatCard label="Lifetime Dividends" value={`$${user.lifetimeEarnings || 0}`} color="#22c55e" />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-              <StatCard label="Circle Referrals" value={leads.length} />
-              <StatCard label="Contracts Secured" value={leads.filter(l => l.status !== LeadStatus.RECEIVED && l.status !== LeadStatus.QUOTED).length} />
-              <StatCard label="Active Portfolio" value={activePolicies} color="#3b82f6" />
-              <StatCard label="Monthly Residuals" value={`$${monthlyResiduals}`} color="#EAB308" />
-              <StatCard label="Lifetime Dividends" value={`$${lifetimeEarnings}`} color="#22c55e" />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-1 space-y-6">
-                <div className="bg-[#111] border border-white/5 p-8 rounded-3xl space-y-6">
-                  <h2 className="text-xl font-black tracking-tighter">Inner Circle Assets</h2>
-                  <div className="space-y-4">
-                    <div className="bg-black p-4 rounded-xl border border-white/10 flex flex-col items-center gap-4">
-                      <div className="bg-white p-2 rounded-lg w-32 h-32 flex items-center justify-center">
-                        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(referralLink)}`} alt="QR Code" className="w-full h-full" />
-                      </div>
-                      <span className="text-[10px] font-black text-gray-500 tracking-widest">Priority Member QR</span>
-                    </div>
-                    <Button fullWidth onClick={() => copyToClipboard()} variant={copySuccess ? 'outline' : 'primary'}>
-                      {copySuccess ? 'Inner Circle Link Copied!' : 'Copy Priority Link'}
-                    </Button>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+              {/* Sidebar: Inner Circle Assets & Support */}
+              <div className="lg:col-span-4 space-y-8">
+                <div className="bg-[#111] border border-white/5 rounded-[32px] p-8 shadow-2xl">
+                  <h3 className="text-2xl font-black text-white tracking-tighter mb-8 uppercase">Inner Circle Assets</h3>
+                  <div className="bg-black aspect-square rounded-[24px] mb-8 flex flex-col items-center justify-center p-8 border border-white/5">
+                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(referralLink)}`} className="w-full max-w-[200px] grayscale invert" alt="QR Link" />
+                    <p className="text-[10px] text-gray-600 font-black tracking-widest uppercase mt-4">Priority Member QR</p>
                   </div>
+                  <button onClick={() => copyToClipboard(referralLink)} className="w-full bg-[#EAB308] text-black font-black py-4 rounded-xl uppercase tracking-widest text-sm shadow-[0_10px_20px_rgba(234,179,8,0.2)] hover:scale-[1.02] active:scale-95 transition-all">
+                    Copy Priority Link
+                  </button>
                 </div>
 
-                <div className="bg-[#171717] p-8 rounded-3xl border border-white/5">
-                  <h2 className="text-xl font-black tracking-tighter mb-4">Executive Support</h2>
-                  <p className="text-sm text-gray-500 font-bold mb-6">Need underwriting prioritization? Contact your dedicated manager.</p>
-                  <a href="https://theinsuranceboss.com" target="_blank" rel="noopener noreferrer">
-                    <Button variant="outline" fullWidth className="text-xs">Access Priority Desk</Button>
-                  </a>
+                <div className="bg-[#111] border border-white/5 rounded-[32px] p-8 shadow-2xl">
+                  <h3 className="text-2xl font-black text-white tracking-tighter mb-4 uppercase">Executive Support</h3>
+                  <p className="text-gray-500 font-bold text-sm leading-relaxed mb-8">Need underwriting prioritization? Contact your dedicated manager.</p>
+                  <button onClick={() => alert("Connecting to Inner Circle Executive Desk...")} className="w-full border-2 border-[#EAB308] text-[#EAB308] font-black py-4 rounded-xl uppercase tracking-widest text-sm hover:bg-[#EAB308] hover:text-black transition-all">
+                    Access Priority Desk
+                  </button>
                 </div>
               </div>
 
-              <div className="lg:col-span-2 bg-[#EAB308] text-black p-10 rounded-[40px] shadow-2xl relative overflow-hidden">
-                <div className="relative z-10">
-                   <h2 className="text-3xl font-black tracking-tighter mb-2">Priority Lead Intake</h2>
-                   <p className="text-black/80 font-bold mb-8">Directly deposit lead data into the Inner Circle vault.</p>
-                   <div className="bg-[#0a0a0a] rounded-[32px] p-2 overflow-hidden shadow-2xl">
-                    {!formSubmitted ? (
-                      <MultiStepForm 
-                        affiliateId={user.id} 
-                        onSuccess={() => {
-                          setFormSubmitted(true);
-                          updateData();
-                          setTimeout(() => setFormSubmitted(false), 5000);
-                        }} 
-                      />
-                    ) : (
-                      <div className="bg-[#111] p-12 text-center text-white rounded-[30px]">
-                        <div className="w-20 h-20 bg-[#EAB308] rounded-full flex items-center justify-center mx-auto mb-6">
-                           <svg className="w-10 h-10 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>
-                        </div>
-                        <h3 className="text-3xl font-black tracking-tighter mb-2">Transmission Verified</h3>
-                        <Button onClick={() => setFormSubmitted(false)}>Submit Another</Button>
-                      </div>
-                    )}
-                   </div>
+              {/* Main: Priority Lead Intake Form */}
+              <div className="lg:col-span-8">
+                <div className="bg-[#EAB308] p-10 rounded-[40px] shadow-2xl">
+                  <h2 className="text-4xl font-black text-black tracking-tighter mb-2 uppercase">Priority Lead Intake</h2>
+                  <p className="text-black/80 font-bold text-sm mb-10">Directly deposit lead data into the Inner Circle vault.</p>
+                  
+                  <DashboardForm affiliateId={user.id} />
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {!isAdmin && activeTab === 'leads' && (
-          <div className="animate-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-[#171717] rounded-3xl border border-white/5 overflow-hidden shadow-2xl">
-              <div className="p-8 border-b border-white/5 flex justify-between items-center bg-black/20">
-                <h2 className="text-2xl font-black tracking-tighter">Inner Circle Lead Vault</h2>
+        {/* EARNINGS TAB */}
+        {!isAdmin && activeTab === 'payouts' && (
+          <div className="space-y-12 animate-in fade-in duration-500">
+            <div>
+              <h1 className="text-5xl font-black tracking-tighter mb-2 text-white uppercase">Financial Hub</h1>
+              <p className="text-gray-500 tracking-widest text-[10px] font-black uppercase">Dividend Disbursement & Routing</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="bg-[#111] border border-white/5 rounded-[40px] p-12 shadow-2xl flex flex-col justify-between min-h-[400px]">
+                <div>
+                  <h2 className="text-3xl font-black text-white tracking-tight mb-2 uppercase">Inner Circle Statement</h2>
+                  <div className="text-[10px] text-[#EAB308] font-black tracking-[0.2em] uppercase mb-8">Yield: 3% of Gross Premium per Bound Policy</div>
+                  <div className="space-y-8">
+                    <div className="flex justify-between items-center border-b border-white/5 pb-4">
+                      <span className="text-gray-400 font-bold text-sm">Current Month Dividends</span>
+                      <span className="text-white font-black text-2xl tracking-tighter">${user.monthlyResiduals || '0.00'}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-b border-white/5 pb-4">
+                      <span className="text-gray-400 font-bold text-sm">Pending Disbursements</span>
+                      <span className="text-white font-black text-2xl tracking-tighter">$0.00</span>
+                    </div>
+                    <div className="flex justify-between items-center pb-4">
+                      <span className="text-gray-400 font-bold text-sm">Next Payout Date</span>
+                      <span className="text-white font-black text-xl tracking-tight uppercase">June 1, 2024</span>
+                    </div>
+                  </div>
+                </div>
+                <button onClick={() => alert("Priority disbursement request sent to treasury.")} className="w-full mt-10 border-2 border-[#EAB308] text-[#EAB308] font-black uppercase tracking-widest text-[11px] py-5 rounded-xl hover:bg-[#EAB308] hover:text-black transition-all">Request Priority Disbursement</button>
               </div>
+
+              <div className="bg-[#111] border border-white/5 rounded-[40px] p-12 shadow-2xl flex flex-col justify-between min-h-[400px]">
+                <div>
+                  <h2 className="text-3xl font-black text-white tracking-tight mb-12 uppercase">Financial Routing</h2>
+                  <div className="bg-black border border-white/5 rounded-3xl p-8 flex items-center gap-6">
+                    <div className="w-14 h-14 bg-[#EAB308] rounded-xl flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(234,179,8,0.2)]">
+                      <svg className="w-8 h-8 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                    </div>
+                    <div>
+                      <div className="text-white font-black text-lg tracking-tight mb-1">Priority Direct Deposit</div>
+                      <div className="text-gray-600 font-bold text-xs tracking-[0.2em]">**** **** **** 8842</div>
+                    </div>
+                  </div>
+                </div>
+                <button onClick={() => alert("Redirecting to secure financial vault for routing updates...")} className="w-full mt-10 bg-white/5 text-gray-300 font-black uppercase tracking-widest text-[11px] py-5 rounded-xl hover:bg-white/10 transition-all border border-white/5">Update Routing Protocol</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* LEAD VAULT TAB */}
+        {(activeTab === 'leads' || activeTab === 'lead_management') && (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex flex-col md:flex-row justify-between items-end gap-6">
+              <div>
+                <h1 className="text-5xl font-black tracking-tighter mb-2 text-white uppercase">{isAdmin ? 'Global Lead Vault' : 'Your Lead Vault'}</h1>
+                <p className="text-gray-500 tracking-widest text-[10px] font-black uppercase">Live Underwriting Transmission Feed</p>
+              </div>
+              <div className="w-full md:w-96 relative">
+                <input type="text" placeholder="Search prospects..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-[#111] border border-white/5 rounded-2xl px-12 py-4 focus:outline-none focus:border-[#EAB308] transition-all text-sm font-bold placeholder:text-gray-700" />
+                <svg className="w-5 h-5 absolute left-4 top-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              </div>
+            </div>
+            <div className="bg-[#111] border border-white/5 rounded-[40px] overflow-hidden shadow-2xl">
               <div className="overflow-x-auto">
-                <table className="w-full text-left">
+                <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="text-[9px] text-gray-500 border-b border-white/5 tracking-[0.2em] bg-black/10 font-black">
-                      <th className="px-8 py-5">Prospect Identity</th>
-                      <th className="px-8 py-5">Product Target</th>
-                      <th className="px-8 py-5">Status</th>
-                      <th className="px-8 py-5">Accrued Commission</th>
-                      <th className="px-8 py-5 text-right">Actions</th>
+                    <tr className="border-b border-white/5 bg-white/[0.02]">
+                      <th className="px-8 py-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Prospect Details</th>
+                      <th className="px-8 py-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Categorization</th>
+                      <th className="px-8 py-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Status</th>
+                      <th className="px-8 py-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Date</th>
+                      <th className="px-8 py-6 text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5 font-bold">
-                    {leads.length > 0 ? leads.map(lead => (
-                      <tr key={lead.id} className="hover:bg-white/[0.02] transition-colors">
-                        <td className="px-8 py-6">
-                           <div className="text-white text-lg">{lead.name}</div>
-                           <div className="text-gray-600 text-[10px] font-mono">{lead.email}</div>
-                        </td>
-                        <td className="px-8 py-6 text-sm text-gray-400">{lead.productType || 'In Underwriting'}</td>
-                        <td className="px-8 py-6">
-                          <span className={`px-4 py-1 rounded-full text-[9px] font-black border tracking-widest ${getStatusColor(lead.status)}`}>
-                            {lead.status}
-                          </span>
-                        </td>
-                        <td className="px-8 py-6 text-white">${lead.commissionEarned?.toFixed(2) || '0.00'}</td>
-                        <td className="px-8 py-6 text-right">
-                          <button 
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); handleDelete('lead', lead.id); }} 
-                            className="p-2 text-gray-500 hover:text-red-500 transition-colors"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                          </button>
-                        </td>
-                      </tr>
-                    )) : (
-                      <tr>
-                        <td colSpan={5} className="px-8 py-20 text-center text-gray-700 font-bold tracking-widest">Lead Vault Currently Empty</td>
-                      </tr>
+                  <tbody className="divide-y divide-white/5">
+                    {filteredLeads.length > 0 ? (
+                      filteredLeads.map((lead) => (
+                        <tr key={lead.id} className="hover:bg-white/[0.01] transition-colors group">
+                          <td className="px-8 py-6"><div className="space-y-1"><div className="font-black text-white text-base tracking-tight">{lead.details?.businessName || lead.name}</div><div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{lead.details?.businessName ? lead.name : 'Individual Contact'}</div></div></td>
+                          <td className="px-8 py-6"><div className="text-sm font-bold text-gray-400">{lead.productType || 'Underwriting Review'}</div>{lead.details?.businessTypes && lead.details.businessTypes.length > 0 && (<div className="inline-block mt-2 px-3 py-1 bg-white/5 rounded-lg border border-white/5 text-[9px] text-[#EAB308] font-black uppercase tracking-tighter">{lead.details.businessTypes[0]}</div>)}</td>
+                          <td className="px-8 py-6"><StatusDropdown value={lead.status} onChange={(s) => handleUpdateStatus(lead.id, s)} /></td>
+                          <td className="px-8 py-6"><div className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{new Date(lead.createdAt).toLocaleDateString()}</div></td>
+                          <td className="px-8 py-6 text-right"><div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => alert(JSON.stringify(lead.details, null, 2))} className="p-2 bg-white/5 rounded-lg text-gray-400 hover:text-white transition-colors" title="View Details"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg></button><button onClick={() => handleDeleteLead(lead.id)} className="p-2 bg-red-500/10 rounded-lg text-red-500 hover:bg-red-500 hover:text-white transition-all" title="Delete Prospect"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button></div></td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr><td colSpan={5} className="px-8 py-20 text-center"><div className="text-gray-600 font-black text-xs uppercase tracking-[0.3em]">No matching records in the vault.</div></td></tr>
                     )}
                   </tbody>
                 </table>
@@ -586,274 +366,312 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
           </div>
         )}
 
-        {!isAdmin && activeTab === 'payouts' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in zoom-in-95">
-             <div className="bg-[#171717] p-10 rounded-3xl border border-white/5">
-                <h3 className="text-2xl font-black mb-8 tracking-tighter">Inner Circle Statement</h3>
-                <div className="space-y-6">
-                   <PayoutRow label="Current Month Dividends" value={`$${monthlyResiduals}`} />
-                   <PayoutRow label="Pending Disbursements" value="$0.00" />
-                   <PayoutRow label="Next Payout Date" value="June 1, 2024" />
-                   <div className="pt-6 border-t border-white/5">
-                     <Button variant="outline" fullWidth>Request Priority Disbursement</Button>
-                   </div>
-                </div>
+        {activeTab === 'tools' && (
+          <div className="space-y-12 animate-in slide-in-from-bottom-6 duration-700">
+             <div className="text-center md:text-left">
+                <h1 className="text-5xl font-black tracking-tighter mb-4 text-white uppercase">Inner Circle Tools</h1>
+                <p className="text-gray-500 tracking-widest text-[10px] font-black uppercase">Authorized Member Networking Assets</p>
              </div>
-             <div className="bg-[#171717] p-10 rounded-3xl border border-white/5">
-                <h3 className="text-2xl font-black mb-8 tracking-tighter">Financial Routing</h3>
-                <div className="bg-black/40 p-6 rounded-2xl border border-[#EAB308]/20 mb-8 flex items-center gap-6">
-                   <div className="w-12 h-12 rounded-xl bg-[#EAB308] text-black flex items-center justify-center">
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3-3v8a3 3 0 003 3z" /></svg>
-                   </div>
-                   <div>
-                      <div className="font-black text-sm">Priority Direct Deposit</div>
-                      <div className="text-xs text-gray-500 font-mono">**** **** **** 8842</div>
-                   </div>
-                </div>
-                <Button variant="secondary" fullWidth className="text-xs">Update Routing Protocol</Button>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+               {toolAssets.map((tool, idx) => (
+                 <div key={idx} className="bg-[#111] border border-white/5 p-12 rounded-[40px] shadow-2xl flex flex-col justify-between hover:border-white/10 transition-all group">
+                   <div><h2 className="text-3xl font-black tracking-tighter mb-4 text-white group-hover:text-[#EAB308] transition-colors uppercase">{tool.title}</h2><p className="text-gray-500 font-bold text-base leading-relaxed mb-10">{tool.description}</p></div>
+                   <button onClick={tool.action} className="w-full border-2 border-[#EAB308] text-[#EAB308] font-black uppercase tracking-widest text-[10px] py-4 rounded-xl hover:bg-[#EAB308] hover:text-black transition-all">Deploy Asset</button>
+                 </div>
+               ))}
              </div>
           </div>
         )}
 
-        {!isAdmin && activeTab === 'tools' && (
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <ToolCard 
-                title="Priority Email Scripts" 
-                desc="High-conversion templates for Inner Circle member networking." 
-                onClick={() => setSelectedAsset('email')}
-              />
-              <ToolCard 
-                title="Inner Circle Digital Assets" 
-                desc="Exclusive pre-branded PDFs for prioritized client distribution." 
-                onClick={() => setSelectedAsset('flyers')}
-              />
-              <ToolCard 
-                title="Elite SMS Templates" 
-                desc="Quick priority snippets for member referral distribution." 
-                onClick={() => setSelectedAsset('sms')}
-              />
-              <ToolCard 
-                title="Custom Vault Generator" 
-                desc="Request a specialized landing page from our marketing producers." 
-                onClick={() => setSelectedAsset('generator')}
-              />
-           </div>
+        {/* --- MODALS --- */}
+        {activeToolModal === 'email' && (
+          <Modal title="Inner Circle Email Scripts" onClose={() => setActiveToolModal(null)}>
+            <div className="space-y-12">
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-[#EAB308] font-black text-sm uppercase tracking-widest">Elite Template: For Real Estate Partners</h4>
+                  <button onClick={() => copyToClipboard("Subject: Priority Insurance Support for Closings\n\nHi [Name],\n\nI'm " + user.name + ", part of the Executive Desk at The Insurance Boss Inner Circle...")} className="text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-white">Copy Text</button>
+                </div>
+                <div className="bg-black p-6 rounded-2xl border border-white/5 font-mono text-[13px] text-gray-400 leading-relaxed">
+                  <p className="mb-4">Subject: Priority Insurance Support for Your Closings</p>
+                  <p className="mb-4">Hi [Name],</p>
+                  <p className="mb-4">I'm {user.name}, part of the Executive Desk at The Insurance Boss Inner Circle. I'm reaching out because I know that securing clear-to-close is your top priority.</p>
+                  <p>...</p>
+                </div>
+              </div>
+            </div>
+          </Modal>
         )}
 
-        {!isAdmin && activeTab === 'program' && <PromotionPage standalone={false} />}
+        {activeToolModal === 'digital' && (
+          <Modal title="Digital Distribution Assets" onClose={() => setActiveToolModal(null)}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {[
+                { name: "Inner Circle Referral Flyer", img: "https://images.unsplash.com/photo-1586281380349-631531a34d4f?auto=format&fit=crop&q=80&w=800" },
+                { name: "Executive One-Pager", img: "https://images.unsplash.com/photo-1454165833762-02651d5b191a?auto=format&fit=crop&q=80&w=800" }
+              ].map((asset, i) => (
+                <div key={i} className="aspect-[4/5] bg-neutral-900 rounded-[32px] overflow-hidden relative group border border-white/5">
+                  <img src={asset.img} className="w-full h-full object-cover grayscale opacity-40 group-hover:opacity-60 transition-all" alt={asset.name} />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
+                  <div className="absolute bottom-8 left-8 right-8">
+                    <div className="text-[#EAB308] text-[10px] font-black uppercase tracking-widest mb-2">Elite Kit</div>
+                    <h4 className="text-white font-black text-xl tracking-tight mb-4">{asset.name}</h4>
+                    <button onClick={() => alert("Downloading PDF Asset...")} className="w-full border border-[#EAB308] text-[#EAB308] font-black text-[10px] py-4 rounded-xl uppercase tracking-widest hover:bg-[#EAB308] hover:text-black transition-all">Download PDF</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Modal>
+        )}
+
+        {activeToolModal === 'sms' && (
+          <Modal title="Elite SMS Templates" onClose={() => setActiveToolModal(null)}>
+            <div className="space-y-12">
+              {[
+                { name: "Inner Circle Intro (Casual)", text: "Hey! If you need a solid coverage review, I have priority access to The Insurance Boss Inner Circle. Check it out through my verified link: " + referralLink },
+                { name: "Priority Referral (Professional)", text: "Hi, for your commercial coverage needs, I'm recommending my partners at The Insurance Boss Inner Circle. Use my link to get moved to the top of the queue: " + referralLink }
+              ].map((sms, i) => (
+                <div key={i} className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h4 className="text-[#EAB308] font-black text-sm uppercase tracking-widest">{sms.name}</h4>
+                    <button onClick={() => copyToClipboard(sms.text)} className="text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-white">Copy Text</button>
+                  </div>
+                  <div className="bg-black p-6 rounded-2xl border border-white/5 font-mono text-[13px] text-gray-400 leading-relaxed">
+                    {sms.text}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Modal>
+        )}
+
+        {activeToolModal === 'vault' && (
+          <Modal title="Custom Vault Generator" onClose={() => setActiveToolModal(null)}>
+            <div className="space-y-10 py-4">
+              <div className="text-center">
+                <h4 className="text-2xl font-black text-white tracking-tighter mb-4 uppercase">Request Specialized Vault</h4>
+                <p className="text-gray-500 font-bold text-sm max-w-md mx-auto">Our executive marketing desk will build a custom-niche vault for your verified account.</p>
+              </div>
+              <div className="space-y-6">
+                <Field label="Target Niche" value={vaultNiche} onChange={setVaultNiche} />
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Executive Briefing Notes</label>
+                  <textarea 
+                    value={vaultNotes}
+                    onChange={(e) => setVaultNotes(e.target.value)}
+                    placeholder="Describe your target audience..."
+                    className="w-full h-40 bg-black border border-white/10 rounded-xl px-6 py-4 text-white font-bold focus:outline-none focus:border-[#EAB308] transition-all resize-none"
+                  />
+                </div>
+                <button onClick={handleVaultRequest} className="w-full bg-[#EAB308] text-black font-black text-[10px] py-5 rounded-xl uppercase tracking-widest shadow-2xl hover:scale-[1.02] active:scale-95 transition-all">Dispatch Request</button>
+              </div>
+            </div>
+          </Modal>
+        )}
       </main>
-
-      {/* ASSET MODAL SYSTEM */}
-      {selectedAsset && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 md:p-8 animate-in fade-in duration-300">
-           <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={() => setSelectedAsset(null)} />
-           <div className="relative w-full max-w-4xl bg-[#171717] border border-white/10 rounded-[32px] overflow-hidden shadow-[0_0_100px_rgba(0,0,0,0.8)] flex flex-col max-h-[90vh]">
-              <div className="p-8 border-b border-white/5 flex justify-between items-center bg-black/40">
-                 <h2 className="text-2xl font-black tracking-tighter">
-                   {selectedAsset === 'email' && "Inner Circle Email Scripts"}
-                   {selectedAsset === 'flyers' && "Inner Circle Digital Assets"}
-                   {selectedAsset === 'sms' && "Elite SMS Templates"}
-                   {selectedAsset === 'generator' && "Inner Circle Vault Customization"}
-                 </h2>
-                 <button onClick={() => setSelectedAsset(null)} className="p-2 hover:bg-white/5 rounded-full transition-colors">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                 </button>
-              </div>
-              
-              <div className="p-8 overflow-y-auto no-scrollbar flex-grow">
-                 {selectedAsset === 'email' && (
-                   <div className="space-y-12">
-                      <AssetItem 
-                        title="Elite Template: For Real Estate Partners"
-                        content={`Subject: Priority Insurance Support for Your Closings\n\nHi [Name],\n\nI'm ${user.name}, part of the Executive Desk at The Insurance Boss Inner Circle. I'm reaching out because I know that securing clear-to-close is your top priority.\n\nMy team handles white-glove insurance reviews for high-value home buyers. We handle the market shopping across 50+ national carriers so your clients get the absolute best rates with priority turnaround.\n\nWould you like to authorize a quick 5-min briefing on how we can speed up your next closing?\n\nBest,\n${user.name}`}
-                        onCopy={(text) => copyToClipboard(text)}
-                      />
-                      <AssetItem 
-                        title="Elite Template: For High-Volume Mortgage Brokers"
-                        content={`Subject: Accelerating Clear-To-Close with Priority Underwriting\n\nHi [Name],\n\nStalling a closing due to insurance binders is a thing of the past. I'm ${user.name}, and I currently hold Inner Circle priority access to a senior underwriting desk that specializes in lightning-fast turnaround.\n\nIf you have high-DTI clients or complex files needing immediate binders, I can prioritize them through my verified vault.\n\nPoint them directly to my priority link here: ${referralLink}\n\nI'll personally monitor the underwriting and provide status updates.\n\nRegards,\n${user.name}`}
-                        onCopy={(text) => copyToClipboard(text)}
-                      />
-                   </div>
-                 )}
-
-                 {selectedAsset === 'sms' && (
-                   <div className="space-y-12">
-                      <AssetItem 
-                        title="Inner Circle Intro (Casual)"
-                        content={`Hey [Name]! If you need a solid coverage review, I have priority access to The Insurance Boss Inner Circle. They are the best in the business. Check it out through my verified link: ${referralLink}`}
-                        onCopy={(text) => copyToClipboard(text)}
-                      />
-                      <AssetItem 
-                        title="Priority Referral (Professional)"
-                        content={`Hi [Name], for your commercial coverage needs, I'm recommending my partners at The Insurance Boss Inner Circle. They handle nationwide priority accounts. Use my link to get moved to the top of the queue: ${referralLink}`}
-                        onCopy={(text) => copyToClipboard(text)}
-                      />
-                   </div>
-                 )}
-
-                 {selectedAsset === 'flyers' && (
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      <FlyerCard title="Inner Circle Referral Flyer" preview="https://images.unsplash.com/photo-1586281380349-632531db7ed4?auto=format&fit=crop&q=80&w=400" />
-                      <FlyerCard title="Inner Circle Business One-Pager" preview="https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&q=80&w=400" />
-                      <FlyerCard title="Priority Claims Breakdown" preview="https://images.unsplash.com/photo-1454165833767-02a1e74a8368?auto=format&fit=crop&q=80&w=400" />
-                      <FlyerCard title="Member Onboarding Package" preview="https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&q=80&w=400" />
-                   </div>
-                 )}
-
-                 {selectedAsset === 'generator' && (
-                   <div className="max-w-xl mx-auto space-y-8 py-10">
-                      <div className="text-center">
-                        <h3 className="text-xl font-black mb-2">Request Specialized Vault</h3>
-                        <p className="text-gray-500 text-sm font-bold">Our executive marketing desk will build a custom-niche vault for your verified account.</p>
-                      </div>
-                      <div className="space-y-6">
-                        <div className="space-y-2">
-                           <label className="text-[10px] font-black text-gray-500 tracking-widest">Target Niche</label>
-                           <select 
-                            value={customNiche}
-                            onChange={(e) => setCustomNiche(e.target.value)}
-                            className="w-full bg-black border border-white/10 rounded-xl px-6 py-4 font-bold text-white appearance-none"
-                           >
-                              <option>Medical & Healthcare Elite</option>
-                              <option>Ecommerce & Tech SaaS</option>
-                              <option>VIP Hospitality & Venues</option>
-                              <option>Real Estate & Development</option>
-                              <option>Logistics & Nationwide Fleet</option>
-                              <option>Specialized Request...</option>
-                           </select>
-                        </div>
-                        <div className="space-y-2">
-                           <label className="text-[10px] font-black text-gray-500 tracking-widest">Executive Briefing Notes</label>
-                           <textarea 
-                            value={customNotes}
-                            onChange={(e) => setCustomNotes(e.target.value)}
-                            className="w-full bg-black border border-white/10 rounded-xl px-6 py-4 font-bold text-white h-32 no-scrollbar" 
-                            placeholder="Describe your target audience and strategic objective..."
-                           ></textarea>
-                        </div>
-                        <Button fullWidth onClick={handleCustomizationSubmit}>Dispatch Request</Button>
-                      </div>
-                   </div>
-                 )}
-              </div>
-           </div>
-        </div>
-      )}
     </div>
   );
 };
-
-// --- HELPER COMPONENTS ---
-
-const RecycleTable = ({ title, items, onRestore, onPurge, renderRow }: any) => (
-  <div className="bg-[#171717] rounded-3xl border border-white/5 overflow-hidden shadow-2xl mb-8">
-    <div className="p-8 border-b border-white/5 flex justify-between items-center bg-black/20">
-      <h2 className="text-2xl font-black tracking-tighter">{title}</h2>
-      <div className="text-xs text-red-500 font-black tracking-widest">Recovery Repository</div>
-    </div>
-    <div className="overflow-x-auto">
-      <table className="w-full text-left">
-        <thead>
-          <tr className="text-[9px] text-gray-500 border-b border-white/5 tracking-[0.2em] bg-black/10 font-black">
-            <th className="px-8 py-5">Record Details</th>
-            <th className="px-8 py-5">Member Context</th>
-            <th className="px-8 py-5">Vault Timestamp</th>
-            <th className="px-8 py-5 text-right">Synchronization</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-white/5 font-bold">
-          {items.length > 0 ? items.map((item: any) => (
-            <tr key={item.id} className="hover:bg-white/[0.02] transition-colors">
-              {renderRow(item)}
-              <td className="px-8 py-6 text-right flex justify-end gap-3">
-                <button 
-                  onClick={() => onRestore(item.id)} 
-                  className="text-[10px] bg-green-500/10 text-green-500 px-3 py-1 rounded-lg border border-green-500/20 font-black tracking-widest hover:bg-green-500 hover:text-black transition-all"
-                >
-                  Restore
-                </button>
-                <button 
-                  onClick={() => onPurge(item.id)} 
-                  className="text-[10px] bg-red-500/10 text-red-500 px-3 py-1 rounded-lg border border-red-500/20 font-black tracking-widest hover:bg-red-500 hover:text-black transition-all"
-                >
-                  Purge
-                </button>
-              </td>
-            </tr>
-          )) : (
-            <tr>
-              <td colSpan={4} className="px-8 py-20 text-center text-gray-800 font-bold tracking-widest">Recovery Vault Empty</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  </div>
-);
 
 const StatCard = ({ label, value, color = 'white' }: any) => (
-  <div className="bg-[#171717] p-6 rounded-2xl border border-white/5 shadow-xl">
-    <div className="text-gray-500 text-[9px] font-black mb-2 tracking-widest">{label}</div>
-    <div className="text-3xl font-black" style={{ color }}>{value}</div>
+  <div className="bg-[#111] p-8 rounded-[32px] border border-white/5 shadow-2xl transition-all hover:border-white/10 group">
+    <div className="text-gray-500 text-[9px] font-black mb-3 tracking-widest uppercase group-hover:text-gray-400 transition-colors">{label}</div>
+    <div className="text-4xl font-black tracking-tighter transition-all" style={{ color }}>{value}</div>
   </div>
 );
 
-const PayoutRow = ({ label, value }: any) => (
-  <div className="flex justify-between items-center group">
-    <span className="text-gray-400 font-bold text-sm group-hover:text-white transition-colors">{label}</span>
-    <span className="font-black text-white">{value}</span>
-  </div>
-);
+const DashboardForm = ({ affiliateId }: { affiliateId: string }) => {
+  const [step, setStep] = useState(1);
+  const [submitted, setSubmitted] = useState(false);
+  const totalSteps = 8;
+  const progress = step === 1 ? 13 : step === 2 ? 25 : step === 3 ? 38 : step === 5 ? 63 : step === 7 ? 88 : 100;
 
-const ToolCard = ({ title, desc, onClick }: any) => (
-  <div className="bg-[#111] p-10 rounded-3xl border border-white/5 hover:border-[#EAB308]/30 transition-all flex flex-col justify-between group">
-    <div>
-      <h3 className="text-2xl font-black mb-4 tracking-tighter group-hover:text-[#EAB308] transition-colors">{title}</h3>
-      <p className="text-gray-500 font-bold text-sm leading-relaxed mb-8">{desc}</p>
-    </div>
-    <Button variant="outline" onClick={onClick} className="text-xs tracking-widest">Deploy Asset</Button>
-  </div>
-);
+  const [formData, setFormData] = useState({
+    businessName: '', dba: '', fein: '', yearsInBusiness: '',
+    address: '', city: '', state: '', zip: '',
+    businessTypes: [] as string[],
+    hasActiveCoverage: false, knowsPremium: false, hasDeclarations: false,
+    contactName: '', email: '', phone: '',
+  });
 
-const AssetItem = ({ title, content, onCopy }: { title: string, content: string, onCopy: (t: string) => void }) => {
-  const [justCopied, setJustCopied] = useState(false);
-
-  const handleCopy = () => {
-    onCopy(content);
-    setJustCopied(true);
-    setTimeout(() => setJustCopied(false), 2000);
+  const nextStep = () => {
+    if (step === 3) setStep(5);
+    else if (step === 5) setStep(7);
+    else if (step === 7) setStep(8);
+    else setStep(s => Math.min(s + 1, totalSteps));
+  };
+  const prevStep = () => {
+    if (step === 5) setStep(3);
+    else if (step === 7) setStep(5);
+    else if (step === 8) setStep(7);
+    else setStep(s => Math.max(s - 1, 1));
   };
 
+  const industries = ["Construction", "Real Estate", "Healthcare", "Professional Services", "Cyber", "Finance", "Manufacturing", "Legal", "Wholesale", "Automotive", "Logistics", "Retail"];
+
+  const toggleBusinessType = (type: string) => {
+    setFormData(prev => ({
+      ...prev,
+      businessTypes: [type] 
+    }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    db.addLead(affiliateId, formData.contactName, formData.email, formData.phone, {
+      businessName: formData.businessName, dba: formData.dba, fein: formData.fein, yearsInBusiness: formData.yearsInBusiness,
+      address: formData.address, city: formData.city, state: formData.state, zipCode: formData.zip,
+      businessTypes: formData.businessTypes, hasActiveCoverage: formData.hasActiveCoverage,
+      knowsPremium: formData.knowsPremium, hasDeclarations: formData.hasDeclarations,
+    });
+    setSubmitted(true);
+  };
+
+  if (submitted) {
+    return (
+      <div className="bg-[#111] rounded-[32px] p-12 text-center animate-in zoom-in-95 duration-500 shadow-2xl border border-white/5">
+        <div className="w-20 h-20 bg-[#EAB308] rounded-full flex items-center justify-center mx-auto mb-8 shadow-2xl">
+          <svg className="w-10 h-10 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>
+        </div>
+        <h2 className="text-3xl font-black text-white tracking-tighter mb-8 uppercase">Transmission Verified</h2>
+        <button onClick={() => { setSubmitted(false); setStep(1); }} className="bg-[#EAB308] text-black font-black px-12 py-4 rounded-xl uppercase tracking-widest text-xs hover:brightness-110 transition-all active:scale-95 shadow-xl">Submit Another</button>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-4">
-       <div className="flex justify-between items-end">
-          <h4 className="font-black text-lg tracking-tight text-[#EAB308]">{title}</h4>
-          <button 
-            onClick={handleCopy} 
-            className={`text-[10px] font-black tracking-widest transition-colors ${justCopied ? 'text-[#EAB308]' : 'text-gray-500 hover:text-white'}`}
-          >
-            {justCopied ? 'Copied!' : 'Copy Text'}
-          </button>
-       </div>
-       <div className="bg-black/50 border border-white/5 p-6 rounded-2xl font-mono text-xs text-gray-400 leading-relaxed whitespace-pre-wrap">
-          {content}
-       </div>
+    <div className="bg-black/95 rounded-[32px] p-8 min-h-[500px] flex flex-col border border-white/10 shadow-2xl">
+      <div className="mb-10 space-y-3">
+        <div className="flex justify-between items-end">
+          <span className="text-[#EAB308] text-[10px] font-black tracking-widest uppercase opacity-70">Step {step} of {totalSteps}</span>
+          <span className="text-white text-xl font-black">{progress}%</span>
+        </div>
+        <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+          <div className="h-full bg-[#EAB308] transition-all duration-500" style={{ width: `${progress}%` }} />
+        </div>
+      </div>
+
+      <div className="flex-grow">
+        {step === 1 && (
+          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+            <h3 className="text-4xl font-black text-white tracking-tighter mb-8 uppercase">Business Basics</h3>
+            <div className="space-y-5">
+              <Field label="Business Legal Name *" value={formData.businessName} onChange={v => setFormData({...formData, businessName: v})} />
+              <Field label="DBA (Doing Business As)" value={formData.dba} onChange={v => setFormData({...formData, dba: v})} />
+              <div className="grid grid-cols-2 gap-5">
+                <Field label="FEIN / EIN *" value={formData.fein} onChange={v => setFormData({...formData, fein: v})} />
+                <Field label="Years in Business *" value={formData.yearsInBusiness} onChange={v => setFormData({...formData, yearsInBusiness: v})} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+            <h3 className="text-4xl font-black text-white tracking-tighter mb-8 uppercase">Location</h3>
+            <div className="space-y-5">
+              <Field label="Address Line 1 *" value={formData.address} onChange={v => setFormData({...formData, address: v})} />
+              <Field label="City *" value={formData.city} onChange={v => setFormData({...formData, city: v})} />
+              <div className="grid grid-cols-2 gap-5">
+                <Field label="State *" value={formData.state} onChange={v => setFormData({...formData, state: v})} />
+                <Field label="Zip Code *" value={formData.zip} onChange={v => setFormData({...formData, zip: v})} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+            <h3 className="text-4xl font-black text-white tracking-tighter mb-8 uppercase">Business Type</h3>
+            <div className="grid grid-cols-2 gap-3">
+              {industries.map(ind => (
+                <button 
+                  key={ind}
+                  onClick={() => toggleBusinessType(ind)}
+                  className={`px-4 py-4 rounded-xl text-[10px] font-black tracking-widest uppercase border transition-all ${formData.businessTypes.includes(ind) ? 'bg-[#EAB308] text-black border-[#EAB308] shadow-[0_0_20px_rgba(234,179,8,0.3)]' : 'bg-white/5 border-white/5 text-gray-500 hover:bg-white/10'}`}
+                >
+                  {ind}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {step === 5 && (
+          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+            <h3 className="text-4xl font-black text-white tracking-tighter mb-8 uppercase">Coverage Info</h3>
+            <div className="space-y-6">
+              <ToggleRow label="Active Coverage?" value={formData.hasActiveCoverage} onChange={v => setFormData({...formData, hasActiveCoverage: v})} />
+              <ToggleRow label="Know Your Premium?" value={formData.knowsPremium} onChange={v => setFormData({...formData, knowsPremium: v})} />
+              <ToggleRow label="Have Dec Page?" value={formData.hasDeclarations} onChange={v => setFormData({...formData, hasDeclarations: v})} />
+            </div>
+          </div>
+        )}
+
+        {step === 7 && (
+          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+            <h3 className="text-4xl font-black text-white tracking-tighter mb-8 uppercase">Contact</h3>
+            <div className="space-y-5">
+              <Field label="Contact Name *" value={formData.contactName} onChange={v => setFormData({...formData, contactName: v})} />
+              <Field label="Email Address *" type="email" value={formData.email} onChange={v => setFormData({...formData, email: v})} />
+              <Field label="Phone Number *" type="tel" value={formData.phone} onChange={v => setFormData({...formData, phone: v})} />
+            </div>
+          </div>
+        )}
+
+        {step === 8 && (
+          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+            <h3 className="text-4xl font-black text-white tracking-tighter mb-8 uppercase">Ready to Transmit</h3>
+            <p className="text-gray-500 font-bold mb-10">Please review your profile before initializing desk deposit.</p>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-8 space-y-4">
+              <SummaryItem label="Business" value={formData.businessName} />
+              <SummaryItem label="Authorized Rep" value={formData.contactName} />
+              <SummaryItem label="Industry" value={formData.businessTypes.join(', ')} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-10 flex gap-4">
+        {step > 1 && (
+          <button onClick={prevStep} className="px-10 py-5 rounded-xl bg-[#111] border border-white/10 text-gray-400 font-black text-xs uppercase tracking-widest hover:bg-[#222] transition-all">Back</button>
+        )}
+        {step < totalSteps ? (
+          <button onClick={nextStep} className="flex-1 bg-[#EAB308] text-black font-black py-5 rounded-xl uppercase tracking-widest text-sm shadow-xl hover:brightness-110 active:scale-95 transition-all">Continue</button>
+        ) : (
+          <button onClick={handleSubmit} className="flex-1 bg-[#EAB308] text-black font-black py-5 rounded-xl uppercase tracking-widest text-sm shadow-xl hover:brightness-110 active:scale-95 transition-all">Initialize Transmission</button>
+        )}
+      </div>
     </div>
   );
 };
 
-const FlyerCard = ({ title, preview }: { title: string, preview: string }) => (
-  <div className="bg-black/50 border border-white/5 rounded-2xl overflow-hidden hover:border-[#EAB308]/50 transition-all group">
-     <div className="aspect-[4/5] relative overflow-hidden">
-        <img src={preview} className="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-700" alt={title} />
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
-        <div className="absolute bottom-4 left-4 right-4">
-           <div className="text-xs font-black tracking-widest text-[#EAB308] mb-1">Elite Kit</div>
-           <div className="font-black truncate">{title}</div>
-        </div>
-     </div>
-     <div className="p-4 bg-black/80">
-        <Button variant="outline" fullWidth className="text-[10px] py-2">Download PDF Asset</Button>
-     </div>
+const Field = ({ label, value, onChange, type = 'text' }: any) => (
+  <div className="space-y-2">
+    <label className="block text-[9px] font-black text-[#EAB308] tracking-widest uppercase">{label}</label>
+    <input 
+      type={type}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      placeholder="..."
+      className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-white font-bold focus:outline-none focus:border-[#EAB308] transition-all placeholder:text-gray-800"
+    />
+  </div>
+);
+
+const ToggleRow = ({ label, value, onChange }: any) => (
+  <div className="flex items-center justify-between bg-black/30 border border-white/10 p-6 rounded-2xl">
+    <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{label}</span>
+    <div className="flex bg-black p-1 rounded-lg">
+      <button onClick={() => onChange(true)} className={`px-5 py-2 rounded-md text-[10px] font-black transition-all ${value ? 'bg-[#EAB308] text-black shadow-lg' : 'text-gray-600 hover:text-gray-400'}`}>Yes</button>
+      <button onClick={() => onChange(false)} className={`px-5 py-2 rounded-md text-[10px] font-black transition-all ${!value ? 'bg-[#EAB308] text-black shadow-lg' : 'text-gray-600 hover:text-gray-400'}`}>No</button>
+    </div>
+  </div>
+);
+
+const SummaryItem = ({ label, value }: any) => (
+  <div className="flex justify-between border-b border-white/5 pb-3 last:border-none last:pb-0">
+    <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest">{label}</span>
+    <span className="text-sm font-bold text-white uppercase">{value || 'N/A'}</span>
   </div>
 );

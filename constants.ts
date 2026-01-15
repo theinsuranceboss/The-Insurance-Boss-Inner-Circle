@@ -10,6 +10,19 @@ export const COLORS = {
 
 export const MOCK_AFFILIATES: Affiliate[] = [
   {
+    id: 'admin-theboss',
+    name: 'The Boss (Executive)',
+    slug: 'the-boss',
+    email: 'theboss@theinsuranceboss.com',
+    username: 'theboss',
+    password: 'adminboss',
+    role: 'admin',
+    niche: Niche.GENERAL,
+    referralCode: 'BOSS-THE-BOSS',
+    lifetimeEarnings: 0,
+    monthlyResiduals: 0
+  },
+  {
     id: 'aff-chris',
     name: 'Chris Uccio',
     slug: 'chris-uccio',

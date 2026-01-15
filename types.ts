@@ -3,12 +3,14 @@ export enum Niche {
   GENERAL = 'General'
 }
 
+// Added BOUND to LeadStatus enum to resolve reference error in constants.ts
 export enum LeadStatus {
   RECEIVED = 'Received',
+  IN_PROGRESS = 'In Progress',
   QUOTED = 'Quoted',
   BOUND = 'Bound',
-  ACTIVE = 'Active',
-  CLOSED = 'Closed'
+  BOUNCED = 'Bounced',
+  REJECTED = 'Rejected'
 }
 
 export interface Affiliate {
