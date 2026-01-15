@@ -23,6 +23,19 @@ export const MOCK_AFFILIATES: Affiliate[] = [
     monthlyResiduals: 0
   },
   {
+    id: 'admin-bossadmin',
+    name: 'Executive Admin',
+    slug: 'boss-admin',
+    email: 'admin@theinsuranceboss.com',
+    username: 'bossadmin',
+    password: 'admin',
+    role: 'admin',
+    niche: Niche.GENERAL,
+    referralCode: 'BOSS-EXECUTIVE-ADMIN',
+    lifetimeEarnings: 0,
+    monthlyResiduals: 0
+  },
+  {
     id: 'aff-test-member',
     name: 'Test Inner Circle Member',
     slug: 'test-member',
