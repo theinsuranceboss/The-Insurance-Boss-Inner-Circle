@@ -56,7 +56,7 @@ export const PromotionPage: React.FC<PromotionPageProps> = ({ standalone = true 
     doc.text("2. Referral Fees", margin, y);
     y += 10;
     doc.setFont("helvetica", "normal");
-    const feesText = "Fees are calculated based on grouse commission received. Disbursements are made via ACH on the 1st of each month following receipt of funds from carrier partners. Residual payments recur annually for as long as the policy remains active and in-force.";
+    const feesText = "Fees are calculated based on gross commission received. Disbursements are made via ACH on the 1st of each month following receipt of funds from carrier partners. Residual payments recur annually for as long as the policy remains active and in-force.";
     const feesLines = doc.splitTextToSize(feesText, 170);
     doc.text(feesLines, margin, y);
     y += (feesLines.length * 7) + 5;
@@ -230,12 +230,13 @@ export const PromotionPage: React.FC<PromotionPageProps> = ({ standalone = true 
                   <div className="bg-[#111] border border-white/10 rounded-[40px] p-8 md:p-16 shadow-2xl">
                     <div className="text-sm text-gray-400 font-medium leading-relaxed space-y-10">
                       <div className="space-y-4">
-                        <p className="text-white font-bold">not engage in selling or negotiating contracts.</p>
+                        <p className="font-black text-white text-xl">1. Scope Of Inner Circle</p>
+                        <p>This Agreement governs your participation in The Insurance Boss Inner Circle. You agree to refer entities for insurance reviews. You acknowledge that you are not a licensed agent and will not engage in selling or negotiating contracts. The Insurance Boss provides the licensing and expertise to close and service the leads provided.</p>
                       </div>
 
                       <div className="space-y-4">
                         <p className="font-black text-white text-xl">2. Referral Fees</p>
-                        <p>Fees are calculated based on grouse commission received. Disbursements are made via ACH on the 1st of each month following receipt of funds from carrier partners.</p>
+                        <p>Fees are calculated based on gross commission received. Disbursements are made via ACH on the 1st of each month following receipt of funds from carrier partners.</p>
                       </div>
 
                       <div className="space-y-4">
