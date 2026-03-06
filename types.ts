@@ -8,7 +8,7 @@ export enum LeadStatus {
   RECEIVED = 'Received',
   IN_PROGRESS = 'In Progress',
   QUOTED = 'Quoted',
-  BOUND = 'Bound',
+  CLOSED = 'Closed',
   BOUNCED = 'Bounced',
   REJECTED = 'Rejected'
 }

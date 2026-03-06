@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { RequestQuoteForm } from './RequestQuoteForm';
 import { db } from '../services/dbService';
 import { Affiliate, Lead, LeadStatus } from '../types';
 import { Button } from './Button';
@@ -9,7 +10,7 @@ interface DashboardProps {
   onLogout: () => void;
 }
 
-type Tab = 'overview' | 'leads' | 'payouts' | 'tools' | 'lead_management' | 'applications' | 'landing_requests' | 'member_management';
+type Tab = 'overview' | 'leads' | 'payouts' | 'lead_management' | 'applications' | 'landing_requests' | 'member_management';
 
 const StatusDropdown = ({ value, onChange, disabled = false }: { value: LeadStatus, onChange: (s: LeadStatus) => void, disabled?: boolean }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -25,15 +26,14 @@ const StatusDropdown = ({ value, onChange, disabled = false }: { value: LeadStat
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const getStatusColor = (s: LeadStatus) => {
+  const getStatusStyles = (s: LeadStatus) => {
     switch (s) {
-      case LeadStatus.BOUND: return 'bg-green-500/10 text-green-500 border-green-500/20';
-      case LeadStatus.RECEIVED: return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
-      case LeadStatus.IN_PROGRESS: return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
-      case LeadStatus.QUOTED: return 'bg-purple-500/10 text-purple-500 border-purple-500/20';
-      case LeadStatus.REJECTED: return 'bg-red-500/10 text-red-500 border-red-500/20';
-      case LeadStatus.BOUNCED: return 'bg-orange-500/10 text-orange-500 border-orange-500/20';
-      default: return 'bg-gray-500/10 text-gray-500 border-gray-500/20';
+      case LeadStatus.CLOSED: return 'text-green-500 border-green-500/20';
+      case LeadStatus.RECEIVED: return 'text-blue-500 border-blue-500/20';
+      case LeadStatus.QUOTED: return 'text-yellow-500 border-yellow-500/20';
+      case LeadStatus.REJECTED: return 'text-red-500 border-red-500/20';
+      case LeadStatus.BOUNCED: return 'text-orange-500 border-orange-500/20';
+      default: return 'text-gray-500 border-gray-500/20';
     }
   };
 
@@ -42,18 +42,18 @@ const StatusDropdown = ({ value, onChange, disabled = false }: { value: LeadStat
       <button
         disabled={disabled}
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-3 border px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all outline-none ${getStatusColor(value)} ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-125'}`}
+        className={`flex items-center gap-2 border px-3 py-1 rounded-lg text-[11px] font-bold transition-all outline-none bg-white/5 ${getStatusStyles(value)} ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'}`}
       >
         {value}
         {!disabled && (
           <svg className={`w-3 h-3 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
           </svg>
         )}
       </button>
       
       {isOpen && !disabled && (
-        <div className="absolute left-0 mt-2 w-48 bg-[#111] border border-white/10 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="absolute left-0 mt-2 w-40 bg-[#171717] border border-white/10 rounded-xl shadow-2xl z-[100] overflow-hidden">
           {(Object.values(LeadStatus) as LeadStatus[]).map((status) => (
             <div
               key={status}
@@ -61,7 +61,7 @@ const StatusDropdown = ({ value, onChange, disabled = false }: { value: LeadStat
                 onChange(status);
                 setIsOpen(false);
               }}
-              className={`px-5 py-3 text-[10px] font-black uppercase tracking-widest cursor-pointer transition-colors border-b border-white/5 last:border-none ${value === status ? 'bg-[#EAB308] text-black' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
+              className={`px-4 py-2 text-[11px] font-bold cursor-pointer transition-colors border-b border-white/5 last:border-none ${value === status ? 'bg-[#EAB308] text-black' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
             >
               {status}
             </div>
@@ -96,17 +96,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [globalLeads, setGlobalLeads] = useState<Lead[]>([]);
   const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>(user.role === 'admin' ? 'lead_management' : 'overview');
-  const [activeToolModal, setActiveToolModal] = useState<'email' | 'digital' | 'sms' | 'vault' | 'add_member' | null>(null);
-  const [vaultNiche, setVaultNiche] = useState('Medical & Healthcare Elite');
-  const [vaultNotes, setVaultNotes] = useState('');
+  const [activeToolModal, setActiveToolModal] = useState<'add_member' | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewRecycleBin, setViewRecycleBin] = useState(false);
 
   // Add Member State
   const [newMember, setNewMember] = useState({ name: '', email: '', username: '', password: '', role: 'partner' as const });
 
-  const baseUrl = window.location.origin;
-  const referralLink = `${baseUrl}/#/${user.slug}`;
+  const referralLink = `https://theinsuranceboss.com/inner-circle-referal-link/`;
 
   const updateData = useCallback(() => {
     if (user.role === 'admin') {
@@ -133,19 +130,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     } catch (err) {
       console.error('Failed to copy:', err);
     }
-  };
-
-  const handleVaultRequest = () => {
-    if (!vaultNotes) return alert("Please provide executive briefing notes.");
-    db.submitLandingPageRequest({
-      affiliateId: user.id,
-      affiliateName: user.name,
-      niche: vaultNiche,
-      notes: vaultNotes
-    });
-    alert("Request dispatched to executive marketing desk!");
-    setActiveToolModal(null);
-    setVaultNotes('');
   };
 
   const handleUpdateStatus = (leadId: string, status: LeadStatus) => {
@@ -192,29 +176,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
   const isAdmin = user.role === 'admin';
 
-  const toolAssets = [
-    {
-      title: "Priority Email Scripts",
-      description: "High-conversion templates for Inner Circle member networking.",
-      action: () => setActiveToolModal('email')
-    },
-    {
-      title: "Inner Circle Digital Assets",
-      description: "Exclusive pre-branded PDFs for prioritized client distribution.",
-      action: () => setActiveToolModal('digital')
-    },
-    {
-      title: "Elite SMS Templates",
-      description: "Quick priority snippets for member referral distribution.",
-      action: () => setActiveToolModal('sms')
-    },
-    {
-      title: "Custom Vault Generator",
-      description: "Request a specialized landing page from our marketing producers.",
-      action: () => setActiveToolModal('vault')
-    }
-  ];
-
   const filteredLeads = (isAdmin ? globalLeads : leads).filter(l => 
     (viewRecycleBin ? l.isDeleted : !l.isDeleted) && (
       l.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -230,13 +191,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
           <div className="bg-[#EAB308] text-black font-black p-2 rounded text-lg leading-none">IB</div>
           <div className="hidden md:flex items-center gap-6">
             {!isAdmin ? (
-              (['overview', 'leads', 'payouts', 'tools'] as Tab[]).map((tab) => (
+              (['overview'] as Tab[]).map((tab) => (
                 <button 
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`text-[10px] font-black tracking-widest uppercase transition-colors ${activeTab === tab ? 'text-[#EAB308]' : 'text-gray-500 hover:text-white'}`}
                 >
-                  {tab === 'leads' ? 'Lead Vault' : tab === 'payouts' ? 'Earnings' : tab === 'tools' ? 'Tools' : tab}
+                  {tab}
                 </button>
               ))
             ) : (
@@ -265,101 +226,179 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         
         {/* OVERVIEW TAB */}
         {!isAdmin && activeTab === 'overview' && (
-          <div className="space-y-12 animate-in fade-in duration-500">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              <StatCard label="Active Portfolio" value={leads.filter(l => l.status === LeadStatus.BOUND).length} color="#3b82f6" />
-              <StatCard label="Monthly Residuals" value={`$${user.monthlyResiduals || 0}`} color="#EAB308" />
-              <StatCard label="Lifetime Dividends" value={`$${user.lifetimeEarnings || 0}`} color="#22c55e" />
+          <div className="space-y-10 animate-in fade-in duration-500">
+            <div className="mb-10">
+              <h1 className="text-4xl font-black tracking-tight mb-2">
+                Welcome back, <span className="text-[#EAB308]">{user.name}</span>
+              </h1>
+              <p className="text-gray-500 font-medium">Here's an overview of your affiliate performance</p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-              <div className="lg:col-span-4 space-y-8">
-                <div className="bg-[#111] border border-white/5 rounded-[32px] p-8 shadow-2xl">
-                  <h3 className="text-2xl font-black text-white tracking-tighter mb-8 uppercase">Inner Circle Assets</h3>
-                  <div className="bg-black aspect-square rounded-[24px] mb-8 flex flex-col items-center justify-center p-8 border border-white/5">
-                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(referralLink)}`} className="w-full max-w-[200px] grayscale invert" alt="QR Link" />
-                    <p className="text-[10px] text-gray-600 font-black tracking-widest uppercase mt-4">Priority Member QR</p>
-                  </div>
-                  <button onClick={() => copyToClipboard(referralLink)} className="w-full bg-[#EAB308] text-black font-black py-4 rounded-xl uppercase tracking-widest text-sm shadow-[0_10px_20px_rgba(234,179,8,0.2)] hover:scale-[1.02] active:scale-95 transition-all">
-                    Copy Priority Link
-                  </button>
-                </div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <StatCard 
+                label="Total Leads" 
+                value={leads.length} 
+                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>}
+                color="#EAB308" 
+              />
+              <StatCard 
+                label="Received" 
+                value={leads.filter(l => l.status === LeadStatus.RECEIVED && !l.isDeleted).length} 
+                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                color="#3b82f6" 
+              />
+              <StatCard 
+                label="Quoted" 
+                value={leads.filter(l => l.status === LeadStatus.QUOTED && !l.isDeleted).length} 
+                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>}
+                color="#EAB308" 
+              />
+              <StatCard 
+                label="Closed" 
+                value={leads.filter(l => l.status === LeadStatus.CLOSED && !l.isDeleted).length} 
+                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                color="#22c55e" 
+              />
+              <StatCard 
+                label="Recycle Bin" 
+                value={leads.filter(l => l.isDeleted).length} 
+                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>}
+                color="#ef4444" 
+              />
+            </div>
 
+            <div className="space-y-6">
+              <div className="flex items-center gap-4">
+                <button 
+                  onClick={() => setViewRecycleBin(false)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${!viewRecycleBin ? 'bg-[#EAB308] text-black shadow-lg' : 'bg-[#171717] text-gray-400 hover:text-white'}`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
+                  Active Leads ({leads.filter(l => !l.isDeleted).length})
+                </button>
+                <button 
+                  onClick={() => setViewRecycleBin(true)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${viewRecycleBin ? 'bg-[#EAB308] text-black shadow-lg' : 'bg-[#171717] text-gray-400 hover:text-white'}`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  Recycle Bin ({leads.filter(l => l.isDeleted).length})
+                </button>
+                <button 
+                  onClick={updateData}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold bg-[#171717] text-gray-400 hover:text-white transition-all"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  Refresh
+                </button>
+              </div>
+
+              <div className="bg-[#111] border border-white/5 rounded-2xl overflow-hidden shadow-2xl">
+                <div className="p-8 border-b border-white/5">
+                  <h3 className="text-xl font-bold">Your Leads</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/5 text-gray-500 text-[11px] font-bold uppercase tracking-wider">
+                        <th className="px-8 py-4">Name</th>
+                        <th className="px-8 py-4">Email</th>
+                        <th className="px-8 py-4">Phone</th>
+                        <th className="px-8 py-4">Status</th>
+                        <th className="px-8 py-4">Date</th>
+                        <th className="px-8 py-4">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {filteredLeads.length > 0 ? (
+                        filteredLeads.map((lead) => (
+                          <tr key={lead.id} className="hover:bg-white/[0.02] transition-colors">
+                            <td className="px-8 py-6 font-bold text-white">{lead.name}</td>
+                            <td className="px-8 py-6 text-gray-400 text-sm">{lead.email}</td>
+                            <td className="px-8 py-6 text-gray-400 text-sm">{lead.phone}</td>
+                            <td className="px-8 py-6">
+                              <StatusDropdown value={lead.status} onChange={(s) => handleUpdateStatus(lead.id, s)} />
+                            </td>
+                            <td className="px-8 py-6 text-gray-500 text-sm">
+                              {new Date(lead.createdAt).toLocaleDateString()}
+                            </td>
+                            <td className="px-8 py-6">
+                              <div className="flex items-center gap-4">
+                                {viewRecycleBin ? (
+                                  <>
+                                    <button onClick={() => handleRestoreLead(lead.id)} className="text-green-500 hover:text-green-400 transition-colors flex items-center gap-1 text-xs font-bold">
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                      Restore
+                                    </button>
+                                    <button onClick={() => handlePurgeLead(lead.id)} className="text-red-500 hover:text-red-400 transition-colors flex items-center gap-1 text-xs font-bold">
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                      Purge
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button onClick={() => handleDeleteLead(lead.id)} className="text-red-500 hover:text-red-400 transition-colors flex items-center gap-1 text-xs font-bold">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    Delete
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="px-8 py-20 text-center text-gray-600 font-bold italic">
+                            No leads found in this section.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 pt-10">
+              <div className="lg:col-span-12">
                 <div className="bg-[#111] border border-white/5 rounded-[32px] p-8 shadow-2xl">
-                  <h3 className="text-2xl font-black text-white tracking-tighter mb-4 uppercase">Executive Support</h3>
-                  <p className="text-gray-500 font-bold text-sm leading-relaxed mb-8">Need underwriting prioritization? Contact your dedicated manager.</p>
-                  <button onClick={() => alert("Connecting to Inner Circle Executive Desk...")} className="w-full border-2 border-[#EAB308] text-[#EAB308] font-black py-4 rounded-xl uppercase tracking-widest text-sm hover:bg-[#EAB308] hover:text-black transition-all">
-                    Access Priority Desk
-                  </button>
+                  <div className="flex items-center gap-3 mb-6">
+                    <svg className="w-5 h-5 text-[#EAB308]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.826a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                    <h3 className="text-xl font-bold text-white uppercase tracking-tight">Your Referral Link</h3>
+                  </div>
+                  
+                  <div className="flex flex-col md:flex-row gap-4 items-center">
+                    <div className="flex-1 w-full bg-black border border-white/10 rounded-xl px-6 py-4 text-gray-400 font-mono text-sm truncate">
+                      {referralLink}
+                    </div>
+                    <button 
+                      onClick={() => copyToClipboard(referralLink)} 
+                      className="w-full md:w-auto bg-[#EAB308] text-black font-black px-8 py-4 rounded-xl uppercase tracking-widest text-xs shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+                      Copy Link
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-600 font-medium mt-4">Share this link to generate leads.</p>
                 </div>
               </div>
 
-              <div className="lg:col-span-8">
+              <div className="lg:col-span-12">
                 <div className="bg-[#EAB308] p-10 rounded-[40px] shadow-2xl">
-                  <h2 className="text-4xl font-black text-black tracking-tighter mb-2 uppercase">Priority Lead Intake</h2>
-                  <p className="text-black/80 font-bold text-sm mb-10">Directly deposit lead data into the Inner Circle vault.</p>
-                  <DashboardForm affiliateId={user.id} />
+                  <h2 className="text-4xl font-black text-black tracking-tighter mb-2 uppercase">ADD YOUR LEAD TO YOUR DATABASE</h2>
+                  <p className="text-black/80 font-bold text-sm mb-10">Directly deposit lead data into your database.</p>
+                  <RequestQuoteForm affiliateId={user.id} />
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* EARNINGS TAB */}
-        {!isAdmin && activeTab === 'payouts' && (
-          <div className="space-y-12 animate-in fade-in duration-500">
-            <div>
-              <h1 className="text-5xl font-black tracking-tighter mb-2 text-white uppercase">Financial Hub</h1>
-              <p className="text-gray-500 tracking-widest text-[10px] font-black uppercase">Dividend Disbursement & Routing</p>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="bg-[#111] border border-white/5 rounded-[40px] p-12 shadow-2xl flex flex-col justify-between min-h-[400px]">
-                <div>
-                  <h2 className="text-3xl font-black text-white tracking-tight mb-2 uppercase">Inner Circle Statement</h2>
-                  <div className="text-[10px] text-[#EAB308] font-black tracking-[0.2em] uppercase mb-8">Yield: 3% of Gross Premium per Bound Policy</div>
-                  <div className="space-y-8">
-                    <div className="flex justify-between items-center border-b border-white/5 pb-4">
-                      <span className="text-gray-400 font-bold text-sm">Current Month Dividends</span>
-                      <span className="text-white font-black text-2xl tracking-tighter">${user.monthlyResiduals || '0.00'}</span>
-                    </div>
-                    <div className="flex justify-between items-center border-b border-white/5 pb-4">
-                      <span className="text-gray-400 font-bold text-sm">Pending Disbursements</span>
-                      <span className="text-white font-black text-2xl tracking-tighter">$0.00</span>
-                    </div>
-                    <div className="flex justify-between items-center pb-4">
-                      <span className="text-gray-400 font-bold text-sm">Next Payout Date</span>
-                      <span className="text-white font-black text-xl tracking-tight uppercase">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
-                    </div>
-                  </div>
-                </div>
-                <button onClick={() => alert("Priority disbursement request sent to treasury.")} className="w-full mt-10 border-2 border-[#EAB308] text-[#EAB308] font-black uppercase tracking-widest text-[11px] py-5 rounded-xl hover:bg-[#EAB308] hover:text-black transition-all">Request Priority Disbursement</button>
-              </div>
-              <div className="bg-[#111] border border-white/5 rounded-[40px] p-12 shadow-2xl flex flex-col justify-between min-h-[400px]">
-                <div>
-                  <h2 className="text-3xl font-black text-white tracking-tight mb-12 uppercase">Financial Routing</h2>
-                  <div className="bg-black border border-white/5 rounded-3xl p-8 flex items-center gap-6">
-                    <div className="w-14 h-14 bg-[#EAB308] rounded-xl flex items-center justify-center shrink-0 shadow-[0_0_20px_rgba(234,179,8,0.2)]">
-                      <svg className="w-8 h-8 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
-                    </div>
-                    <div>
-                      <div className="text-white font-black text-lg tracking-tight mb-1">Priority Direct Deposit</div>
-                      <div className="text-gray-600 font-bold text-xs tracking-[0.2em]">**** **** **** 8842</div>
-                    </div>
-                  </div>
-                </div>
-                <button onClick={() => alert("Redirecting to secure financial vault for routing updates...")} className="w-full mt-10 bg-white/5 text-gray-300 font-black uppercase tracking-widest text-[11px] py-5 rounded-xl hover:bg-white/10 transition-all border border-white/5">Update Routing Protocol</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* LEAD VAULT TAB */}
-        {(activeTab === 'leads' || activeTab === 'lead_management') && (
+        {/* GLOBAL LEAD VAULT (ADMIN ONLY) */}
+        {isAdmin && activeTab === 'lead_management' && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex flex-col md:flex-row justify-between items-end gap-6">
               <div>
                 <h1 className="text-5xl font-black tracking-tighter mb-2 text-white uppercase">
-                  {viewRecycleBin ? 'Leads Recycle Bin' : (isAdmin ? 'Global Lead Vault' : 'Your Lead Vault')}
+                  {viewRecycleBin ? 'Leads Recycle Bin' : 'Global Lead Vault'}
                 </h1>
                 <p className="text-gray-500 tracking-widest text-[10px] font-black uppercase">
                   {viewRecycleBin ? 'DELETED RECORDS PENDING PURGE' : 'Live Underwriting Transmission Feed'}
@@ -488,23 +527,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
           </div>
         )}
 
-        {activeTab === 'tools' && (
-          <div className="space-y-12 animate-in slide-in-from-bottom-6 duration-700">
-             <div className="text-center md:text-left">
-                <h1 className="text-5xl font-black tracking-tighter mb-4 text-white uppercase">Inner Circle Tools</h1>
-                <p className="text-gray-500 tracking-widest text-[10px] font-black uppercase">Authorized Member Networking Assets</p>
-             </div>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-               {toolAssets.map((tool, idx) => (
-                 <div key={idx} className="bg-[#111] border border-white/5 p-12 rounded-[40px] shadow-2xl flex flex-col justify-between hover:border-white/10 transition-all group">
-                   <div><h2 className="text-3xl font-black tracking-tighter mb-4 text-white group-hover:text-[#EAB308] transition-colors uppercase">{tool.title}</h2><p className="text-gray-500 font-bold text-base leading-relaxed mb-10">{tool.description}</p></div>
-                   <button onClick={tool.action} className="w-full border-2 border-[#EAB308] text-[#EAB308] font-black uppercase tracking-widest text-[10px] py-4 rounded-xl hover:bg-[#EAB308] hover:text-black transition-all">Deploy Asset</button>
-                 </div>
-               ))}
-             </div>
-          </div>
-        )}
-
         {/* --- MODALS --- */}
         {activeToolModal === 'add_member' && (
           <Modal title="Authorize New Inner Circle Member" onClose={() => setActiveToolModal(null)}>
@@ -529,267 +551,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
           </Modal>
         )}
 
-        {activeToolModal === 'email' && (
-          <Modal title="Inner Circle Email Scripts" onClose={() => setActiveToolModal(null)}>
-            <div className="space-y-12">
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h4 className="text-[#EAB308] font-black text-sm uppercase tracking-widest">Elite Template: For Real Estate Partners</h4>
-                  <button onClick={() => copyToClipboard("Subject: Priority Insurance Support for Closings\n\nHi [Name],\n\nI'm " + user.name + ", part of the Executive Desk at The Insurance Boss Inner Circle...")} className="text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-white">Copy Text</button>
-                </div>
-                <div className="bg-black p-6 rounded-2xl border border-white/5 font-mono text-[13px] text-gray-400 leading-relaxed">
-                  <p className="mb-4">Subject: Priority Insurance Support for Your Closings</p>
-                  <p className="mb-4">Hi [Name],</p>
-                  <p className="mb-4">I'm {user.name}, part of the Executive Desk at The Insurance Boss Inner Circle. I'm reaching out because I know that securing clear-to-close is your top priority.</p>
-                  <p>...</p>
-                </div>
-              </div>
-            </div>
-          </Modal>
-        )}
-
-        {activeToolModal === 'digital' && (
-          <Modal title="Digital Distribution Assets" onClose={() => setActiveToolModal(null)}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {[
-                { name: "Inner Circle Referral Flyer", img: "https://images.unsplash.com/photo-1586281380349-631531a34d4f?auto=format&fit=crop&q=80&w=800" },
-                { name: "Executive One-Pager", img: "https://images.unsplash.com/photo-1454165833762-02651d5b191a?auto=format&fit=crop&q=80&w=800" }
-              ].map((asset, i) => (
-                <div key={i} className="aspect-[4/5] bg-neutral-900 rounded-[32px] overflow-hidden relative group border border-white/5">
-                  <img src={asset.img} className="w-full h-full object-cover grayscale opacity-40 group-hover:opacity-60 transition-all" alt={asset.name} />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
-                  <div className="absolute bottom-8 left-8 right-8">
-                    <div className="text-[#EAB308] text-[10px] font-black uppercase tracking-widest mb-2">Elite Kit</div>
-                    <h4 className="text-white font-black text-xl tracking-tight mb-4">{asset.name}</h4>
-                    <button onClick={() => alert("Downloading PDF Asset...")} className="w-full border border-[#EAB308] text-[#EAB308] font-black text-[10px] py-4 rounded-xl uppercase tracking-widest hover:bg-[#EAB308] hover:text-black transition-all">Download PDF</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Modal>
-        )}
-
-        {activeToolModal === 'sms' && (
-          <Modal title="Elite SMS Templates" onClose={() => setActiveToolModal(null)}>
-            <div className="space-y-12">
-              {[
-                { name: "Inner Circle Intro (Casual)", text: "Hey! If you need a solid coverage review, I have priority access to The Insurance Boss Inner Circle. Check it out through my verified link: " + referralLink },
-                { name: "Priority Referral (Professional)", text: "Hi, for your commercial coverage needs, I'm recommending my partners at The Insurance Boss Inner Circle. Use my link to get moved to the top of the queue: " + referralLink }
-              ].map((sms, i) => (
-                <div key={i} className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h4 className="text-[#EAB308] font-black text-sm uppercase tracking-widest">{sms.name}</h4>
-                    <button onClick={() => copyToClipboard(sms.text)} className="text-[10px] font-black uppercase tracking-widest text-gray-500 hover:text-white">Copy Text</button>
-                  </div>
-                  <div className="bg-black p-6 rounded-2xl border border-white/5 font-mono text-[13px] text-gray-400 leading-relaxed">
-                    {sms.text}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Modal>
-        )}
-
-        {activeToolModal === 'vault' && (
-          <Modal title="Custom Vault Generator" onClose={() => setActiveToolModal(null)}>
-            <div className="space-y-10 py-4">
-              <div className="text-center">
-                <h4 className="text-2xl font-black text-white tracking-tighter mb-4 uppercase">Request Specialized Vault</h4>
-                <p className="text-gray-500 font-bold text-sm max-w-md mx-auto">Our executive marketing desk will build a custom-niche vault for your verified account.</p>
-              </div>
-              <div className="space-y-6">
-                <Field label="Target Niche" value={vaultNiche} onChange={setVaultNiche} />
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Executive Briefing Notes</label>
-                  <textarea 
-                    value={vaultNotes}
-                    onChange={(e) => setVaultNotes(e.target.value)}
-                    placeholder="Describe your target audience..."
-                    className="w-full h-40 bg-black border border-white/10 rounded-xl px-6 py-4 text-white font-bold focus:outline-none focus:border-[#EAB308] transition-all resize-none"
-                  />
-                </div>
-                <button onClick={handleVaultRequest} className="w-full bg-[#EAB308] text-black font-black text-[10px] py-5 rounded-xl uppercase tracking-widest shadow-2xl hover:scale-[1.02] active:scale-95 transition-all">Dispatch Request</button>
-              </div>
-            </div>
-          </Modal>
-        )}
       </main>
     </div>
   );
 };
 
-const StatCard = ({ label, value, color = 'white' }: any) => (
-  <div className="bg-[#111] p-8 rounded-[32px] border border-white/5 shadow-2xl transition-all hover:border-white/10 group">
-    <div className="text-gray-500 text-[9px] font-black mb-3 tracking-widest uppercase group-hover:text-gray-400 transition-colors">{label}</div>
-    <div className="text-4xl font-black tracking-tighter transition-all" style={{ color }}>{value}</div>
+const StatCard = ({ label, value, icon, color = 'white' }: any) => (
+  <div className="bg-[#111] p-6 rounded-2xl border border-white/5 shadow-xl transition-all hover:border-white/10 group">
+    <div className="mb-4" style={{ color }}>{icon}</div>
+    <div className="text-3xl font-black tracking-tighter mb-1" style={{ color }}>{value}</div>
+    <div className="text-gray-500 text-[11px] font-bold tracking-tight uppercase">{label}</div>
   </div>
 );
 
-const DashboardForm = ({ affiliateId }: { affiliateId: string }) => {
-  const [step, setStep] = useState(1);
-  const [submitted, setSubmitted] = useState(false);
-  const totalSteps = 8;
-  const progress = step === 1 ? 13 : step === 2 ? 25 : step === 3 ? 38 : step === 5 ? 63 : step === 7 ? 88 : 100;
-
-  const [formData, setFormData] = useState({
-    businessName: '', dba: '', fein: '', yearsInBusiness: '',
-    address: '', city: '', state: '', zip: '',
-    businessTypes: [] as string[],
-    hasActiveCoverage: false, knowsPremium: false, hasDeclarations: false,
-    contactName: '', email: '', phone: '',
-  });
-
-  const nextStep = () => {
-    if (step === 3) setStep(5);
-    else if (step === 5) setStep(7);
-    else if (step === 7) setStep(8);
-    else setStep(s => Math.min(s + 1, totalSteps));
-  };
-  const prevStep = () => {
-    if (step === 5) setStep(3);
-    else if (step === 7) setStep(5);
-    else if (step === 8) setStep(7);
-    else setStep(s => Math.max(s - 1, 1));
-  };
-
-  const industries = ["Construction", "Real Estate", "Healthcare", "Professional Services", "Cyber", "Finance", "Manufacturing", "Legal", "Wholesale", "Automotive", "Logistics", "Retail", "Food & Beverage", "Other"];
-
-  const toggleBusinessType = (type: string) => {
-    setFormData(prev => ({
-      ...prev,
-      businessTypes: [type] 
-    }));
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    db.addLead(affiliateId, formData.contactName, formData.email, formData.phone, {
-      businessName: formData.businessName, dba: formData.dba, fein: formData.fein, yearsInBusiness: formData.yearsInBusiness,
-      address: formData.address, city: formData.city, state: formData.state, zipCode: formData.zip,
-      businessTypes: formData.businessTypes, hasActiveCoverage: formData.hasActiveCoverage,
-      knowsPremium: formData.knowsPremium, hasDeclarations: formData.hasDeclarations,
-    });
-    setSubmitted(true);
-  };
-
-  if (submitted) {
-    return (
-      <div className="bg-[#111] rounded-[32px] p-12 text-center animate-in zoom-in-95 duration-500 shadow-2xl border border-white/5">
-        <div className="w-20 h-20 bg-[#EAB308] rounded-full flex items-center justify-center mx-auto mb-8 shadow-2xl">
-          <svg className="w-10 h-10 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>
-        </div>
-        <h2 className="text-3xl font-black text-white tracking-tighter mb-8 uppercase">Transmission Verified</h2>
-        <button onClick={() => { setSubmitted(false); setStep(1); }} className="bg-[#EAB308] text-black font-black px-12 py-4 rounded-xl uppercase tracking-widest text-xs hover:brightness-110 transition-all active:scale-95 shadow-xl">Submit Another</button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-black/95 rounded-[32px] p-8 min-h-[500px] flex flex-col border border-white/10 shadow-2xl">
-      <div className="mb-10 space-y-3">
-        <div className="flex justify-between items-end">
-          <span className="text-[#EAB308] text-[10px] font-black tracking-widest uppercase opacity-70">Step {step} of {totalSteps}</span>
-          <span className="text-white text-xl font-black">{progress}%</span>
-        </div>
-        <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-          <div className="h-full bg-[#EAB308] transition-all duration-500" style={{ width: `${progress}%` }} />
-        </div>
-      </div>
-
-      <div className="flex-grow">
-        {step === 1 && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-            <h3 className="text-4xl font-black text-white tracking-tighter mb-8 uppercase">Business Basics</h3>
-            <div className="space-y-5">
-              <Field label="Business Legal Name *" value={formData.businessName} onChange={(v: string) => setFormData({...formData, businessName: v})} />
-              <Field label="DBA (Doing Business As)" value={formData.dba} onChange={(v: string) => setFormData({...formData, dba: v})} />
-              <div className="grid grid-cols-2 gap-5">
-                <Field label="FEIN / EIN *" value={formData.fein} onChange={(v: string) => setFormData({...formData, fein: v})} />
-                <Field label="Years in Business *" value={formData.yearsInBusiness} onChange={(v: string) => setFormData({...formData, yearsInBusiness: v})} />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-            <h3 className="text-4xl font-black text-white tracking-tighter mb-8 uppercase">Location</h3>
-            <div className="space-y-5">
-              <Field label="Address Line 1 *" value={formData.address} onChange={(v: string) => setFormData({...formData, address: v})} />
-              <Field label="City *" value={formData.city} onChange={(v: string) => setFormData({...formData, city: v})} />
-              <div className="grid grid-cols-2 gap-5">
-                <Field label="State *" value={formData.state} onChange={(v: string) => setFormData({...formData, state: v})} />
-                <Field label="Zip Code *" value={formData.zip} onChange={(v: string) => setFormData({...formData, zip: v})} />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {step === 3 && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-            <h3 className="text-4xl font-black text-white tracking-tighter mb-8 uppercase">Business Type</h3>
-            <div className="grid grid-cols-2 gap-3">
-              {industries.map(ind => (
-                <button 
-                  key={ind}
-                  onClick={() => toggleBusinessType(ind)}
-                  className={`px-4 py-4 rounded-xl text-[10px] font-black tracking-widest uppercase border transition-all ${formData.businessTypes.includes(ind) ? 'bg-[#EAB308] text-black border-[#EAB308] shadow-[0_0_20px_rgba(234,179,8,0.3)]' : 'bg-white/5 border-white/5 text-gray-500 hover:bg-white/10'}`}
-                >
-                  {ind}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {step === 5 && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-            <h3 className="text-4xl font-black text-white tracking-tighter mb-8 uppercase">Coverage Info</h3>
-            <div className="space-y-6">
-              <ToggleRow label="Active Coverage?" value={formData.hasActiveCoverage} onChange={(v: boolean) => setFormData({...formData, hasActiveCoverage: v})} />
-              <ToggleRow label="Know Your Premium?" value={formData.knowsPremium} onChange={(v: boolean) => setFormData({...formData, knowsPremium: v})} />
-              <ToggleRow label="Have Dec Page?" value={formData.hasDeclarations} onChange={(v: boolean) => setFormData({...formData, hasDeclarations: v})} />
-            </div>
-          </div>
-        )}
-
-        {step === 7 && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-            <h3 className="text-4xl font-black text-white tracking-tighter mb-8 uppercase">Contact</h3>
-            <div className="space-y-5">
-              <Field label="Contact Name *" value={formData.contactName} onChange={(v: string) => setFormData({...formData, contactName: v})} />
-              <Field label="Email Address *" type="email" value={formData.email} onChange={(v: string) => setFormData({...formData, email: v})} />
-              <Field label="Phone Number *" type="tel" value={formData.phone} onChange={(v: string) => setFormData({...formData, phone: v})} />
-            </div>
-          </div>
-        )}
-
-        {step === 8 && (
-          <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-            <h3 className="text-4xl font-black text-white tracking-tighter mb-8 uppercase">Ready to Transmit</h3>
-            <p className="text-gray-500 font-bold mb-10">Please review your profile before initializing desk deposit.</p>
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-8 space-y-4">
-              <SummaryItem label="Business" value={formData.businessName} />
-              <SummaryItem label="Authorized Rep" value={formData.contactName} />
-              <SummaryItem label="Industry" value={formData.businessTypes.join(', ')} />
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="mt-10 flex gap-4">
-        {step > 1 && (
-          <button onClick={prevStep} className="px-10 py-5 rounded-xl bg-[#111] border border-white/10 text-gray-400 font-black text-xs uppercase tracking-widest hover:bg-[#222] transition-all">Back</button>
-        )}
-        {step < totalSteps ? (
-          <button onClick={nextStep} className="flex-1 bg-[#EAB308] text-black font-black py-5 rounded-xl uppercase tracking-widest text-sm shadow-xl hover:brightness-110 active:scale-95 transition-all">Continue</button>
-        ) : (
-          <button onClick={handleSubmit} className="flex-1 bg-[#EAB308] text-black font-black py-5 rounded-xl uppercase tracking-widest text-sm shadow-xl hover:brightness-110 active:scale-95 transition-all">Initialize Transmission</button>
-        )}
-      </div>
-    </div>
-  );
-};
 
 const Field = ({ label, value, onChange, type = 'text', placeholder = '...' }: any) => (
   <div className="space-y-2">

@@ -17,6 +17,19 @@ class DBService {
       const savedAffiliates = localStorage.getItem('boss_affiliates');
       if (savedAffiliates !== null) {
         this.affiliates = JSON.parse(savedAffiliates);
+        // Sync mock credentials
+        let updated = false;
+        MOCK_AFFILIATES.forEach(mock => {
+          const existingIdx = this.affiliates.findIndex(a => a.username.toLowerCase() === mock.username.toLowerCase());
+          if (existingIdx === -1) {
+            this.affiliates.push(mock);
+            updated = true;
+          } else if (this.affiliates[existingIdx].password !== mock.password) {
+            this.affiliates[existingIdx].password = mock.password;
+            updated = true;
+          }
+        });
+        if (updated) this.saveAffiliates();
       } else {
         this.affiliates = [...MOCK_AFFILIATES];
         this.saveAffiliates();
@@ -25,6 +38,16 @@ class DBService {
       const savedLeads = localStorage.getItem('boss_leads');
       if (savedLeads !== null) {
         this.leads = JSON.parse(savedLeads);
+        // Sync mock leads
+        let updated = false;
+        MOCK_LEADS.forEach(mock => {
+          const existingIdx = this.leads.findIndex(l => l.id === mock.id);
+          if (existingIdx === -1) {
+            this.leads.push(mock);
+            updated = true;
+          }
+        });
+        if (updated) this.saveLeads();
       } else {
         this.leads = [...MOCK_LEADS];
         this.saveLeads();
