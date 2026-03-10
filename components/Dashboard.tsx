@@ -10,7 +10,7 @@ interface DashboardProps {
   onLogout: () => void;
 }
 
-type Tab = 'overview' | 'leads' | 'payouts' | 'lead_management' | 'applications' | 'landing_requests' | 'member_management' | 'settings';
+type Tab = 'overview' | 'leads' | 'payouts' | 'lead_management' | 'member_management' | 'settings';
 
 const StatusDropdown = ({ value, onChange, disabled = false }: { value: LeadStatus, onChange: (s: LeadStatus) => void, disabled?: boolean }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -96,7 +96,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [globalLeads, setGlobalLeads] = useState<Lead[]>([]);
   const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>(user.role === 'admin' ? 'lead_management' : 'overview');
-  const [activeToolModal, setActiveToolModal] = useState<'add_member' | 'change_password' | null>(null);
+  const [activeToolModal, setActiveToolModal] = useState<'add_member' | 'edit_member' | 'change_password' | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewRecycleBin, setViewRecycleBin] = useState(false);
 
@@ -106,6 +106,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
   // Add Member State
   const [newMember, setNewMember] = useState({ name: '', email: '', username: '', password: '', role: 'partner' as const });
+  
+  // Edit Member State
+  const [editingMember, setEditingMember] = useState<Affiliate | null>(null);
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -211,6 +214,22 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     updateData();
   };
 
+  const handleUpdateMember = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMember) return;
+    db.updateAffiliate(editingMember.id, {
+      name: editingMember.name,
+      email: editingMember.email,
+      username: editingMember.username,
+      password: editingMember.password,
+      role: editingMember.role
+    });
+    alert("Member identity updated!");
+    setActiveToolModal(null);
+    setEditingMember(null);
+    updateData();
+  };
+
   const isAdmin = user.role === 'admin';
 
   const filteredLeads = (isAdmin ? globalLeads : leads).filter(l => 
@@ -238,13 +257,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                 </button>
               ))
             ) : (
-              (['lead_management', 'member_management', 'applications', 'landing_requests', 'settings'] as Tab[]).map((tab) => (
+              (['lead_management', 'member_management', 'settings'] as Tab[]).map((tab) => (
                 <button 
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`text-[10px] font-black tracking-widest uppercase transition-colors ${activeTab === tab ? 'text-[#EAB308]' : 'text-gray-500 hover:text-white'}`}
                 >
-                  {tab === 'lead_management' ? 'Global Vault' : tab === 'applications' ? 'Inquiries' : tab === 'member_management' ? 'Members' : tab === 'settings' ? 'Settings' : 'Vault Requests'}
+                  {tab === 'lead_management' ? 'Global Vault' : tab === 'member_management' ? 'Members' : 'Settings'}
                 </button>
               ))
             )}
@@ -555,7 +574,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                         </span>
                       </td>
                       <td className="px-8 py-6 text-right">
-                         <button onClick={() => alert("Member modification is restricted for the test build.")} className="text-[10px] font-black uppercase text-gray-500 hover:text-white transition-colors">Edit Identity</button>
+                         <button 
+                           onClick={() => {
+                             setEditingMember({...aff});
+                             setActiveToolModal('edit_member');
+                           }} 
+                           className="text-[10px] font-black uppercase text-gray-500 hover:text-white transition-colors"
+                         >
+                           Edit Identity
+                         </button>
                       </td>
                     </tr>
                   ))}
@@ -673,6 +700,28 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                 </div>
               </div>
               <button type="submit" className="w-full bg-[#EAB308] text-black font-black text-[11px] py-5 rounded-xl uppercase tracking-[0.2em] shadow-2xl hover:scale-[1.01] active:scale-95 transition-all mt-4">Grant Vault Access</button>
+            </form>
+          </Modal>
+        )}
+        {activeToolModal === 'edit_member' && editingMember && (
+          <Modal title="Edit Member Identity" onClose={() => { setActiveToolModal(null); setEditingMember(null); }}>
+            <form onSubmit={handleUpdateMember} className="space-y-6 py-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Field label="Full Name" value={editingMember.name} onChange={(v: string) => setEditingMember({...editingMember, name: v})} placeholder="Executive Name" />
+                <Field label="Email Address" type="email" value={editingMember.email} onChange={(v: string) => setEditingMember({...editingMember, email: v})} placeholder="work@email.com" />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Field label="Member Username" value={editingMember.username} onChange={(v: string) => setEditingMember({...editingMember, username: v})} placeholder="Login Username" />
+                <Field label="Member Password" type="text" value={editingMember.password} onChange={(v: string) => setEditingMember({...editingMember, password: v})} placeholder="Vault Password" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Access Role</label>
+                <div className="flex bg-black p-1 rounded-xl border border-white/5">
+                  <button type="button" onClick={() => setEditingMember({...editingMember, role: 'partner'})} className={`flex-1 py-3 rounded-lg text-[10px] font-black uppercase transition-all ${editingMember.role === 'partner' ? 'bg-[#EAB308] text-black shadow-lg' : 'text-gray-500 hover:text-white'}`}>Commercial Partner</button>
+                  <button type="button" onClick={() => setEditingMember({...editingMember, role: 'admin'})} className={`flex-1 py-3 rounded-lg text-[10px] font-black uppercase transition-all ${editingMember.role === 'admin' ? 'bg-red-500 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}>Desk Administrator</button>
+                </div>
+              </div>
+              <button type="submit" className="w-full bg-[#EAB308] text-black font-black text-[11px] py-5 rounded-xl uppercase tracking-[0.2em] shadow-2xl hover:scale-[1.01] active:scale-95 transition-all mt-4">Save Identity Changes</button>
             </form>
           </Modal>
         )}

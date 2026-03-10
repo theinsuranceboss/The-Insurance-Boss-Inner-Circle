@@ -155,6 +155,15 @@ class DBService {
     }
   }
 
+  updateAffiliate(id: string, data: Partial<Affiliate>): void {
+    this.loadData();
+    const affiliate = this.affiliates.find(a => a.id === id);
+    if (affiliate) {
+      Object.assign(affiliate, data);
+      this.saveAffiliates();
+    }
+  }
+
   addLead(affiliateId: string, name: string, email: string, phone: string, details?: Lead['details']): Lead {
     const newLead: Lead = {
       id: `lead-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
