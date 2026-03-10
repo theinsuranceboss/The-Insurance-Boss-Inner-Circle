@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from './Button';
-import { db } from '../services/dbService';
 import { Affiliate } from '../types';
-import { jsPDF } from 'jspdf';
+import { ZapierJoinForm } from './ZapierJoinForm';
 
 const CountUp = ({ end, duration = 2000, prefix = '', suffix = '' }: any) => {
   const [count, setCount] = useState(0);
@@ -42,18 +41,6 @@ interface PromotionPageProps {
 }
 
 export const PromotionPage: React.FC<PromotionPageProps> = ({ standalone = true, referralAffiliate = null }) => {
-  const [appSubmitted, setAppSubmitted] = useState(false);
-  const [agreementAccepted, setAgreementAccepted] = useState(false);
-  const [appData, setAppData] = useState({
-    fullName: '',
-    businessName: '',
-    email: '',
-    phone: '',
-    industry: '',
-    avgReferrals: '',
-    website: ''
-  });
-
   const stats = [
     { label: "Active Affiliates", value: "500+", icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -115,82 +102,6 @@ export const PromotionPage: React.FC<PromotionPageProps> = ({ standalone = true,
       )
     }
   ];
-
-  const handleAppSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (standalone && !agreementAccepted) {
-      alert("Please acknowledge the Master Commercial Agreement before submitting.");
-      return;
-    }
-    db.submitApplication(appData);
-    setAppSubmitted(true);
-  };
-
-  const generateMasterAgreementPDF = () => {
-    const doc = new jsPDF();
-    const margin = 20;
-    let y = 30;
-
-    doc.setFontSize(22);
-    doc.setTextColor(0, 0, 0);
-    doc.setFont("helvetica", "bold");
-    doc.text("Inner Circle Master Commercial Agreement", margin, y);
-    y += 20;
-    
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.text("1. Scope Of Commercial Inner Circle", margin, y);
-    y += 10;
-    doc.setFont("helvetica", "normal");
-    const scopeText = "This Agreement governs your participation in The Insurance Boss Commercial Inner Circle. You agree to refer business entities for commercial risk reviews. You acknowledge that you are not a licensed agent and will not engage in selling or negotiating contracts. The Insurance Boss provides the licensing and commercial expertise to close and service the B2B leads provided.";
-    const scopeLines = doc.splitTextToSize(scopeText, 170);
-    doc.text(scopeLines, margin, y);
-    y += (scopeLines.length * 7) + 5;
-
-    doc.setFont("helvetica", "bold");
-    doc.text("2. Commercial Referral Fees", margin, y);
-    y += 10;
-    doc.setFont("helvetica", "normal");
-    const feesText = "Referral fees are calculated as 3% of the gross annual premium received from the carrier for policies bound through the Inner Circle. Disbursements are made via ACH on the 1st of each month. Residual payments recur annually for as long as the commercial policy remains active and in-force, for the life of the policy.";
-    const feesLines = doc.splitTextToSize(feesText, 170);
-    doc.text(feesLines, margin, y);
-    y += (feesLines.length * 7) + 5;
-
-    doc.setFont("helvetica", "bold");
-    doc.text("3. Corporate Confidentiality", margin, y);
-    y += 10;
-    doc.setFont("helvetica", "normal");
-    const confText = "All business data, EINs, and commercial underwriting processes shared via the vault are strictly confidential. You agree to protect this corporate information and use it solely for the purposes of the referral program.";
-    const confLines = doc.splitTextToSize(confText, 170);
-    doc.text(confLines, margin, y);
-    y += (confLines.length * 7) + 15;
-
-    doc.setDrawColor(234, 179, 8);
-    doc.setLineWidth(1);
-    doc.line(margin, y, 190, y);
-    y += 15;
-
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Digital Signature: ${appData.fullName || "Awaiting Signature"}`, margin, y);
-    y += 7;
-    doc.text(`Business: ${appData.businessName || "Pending Enrollment"}`, margin, y);
-    y += 7;
-    doc.text(`Verification Date: ${new Date().toLocaleDateString('en-US')}`, margin, y);
-    y += 7;
-    doc.text("This document constitutes a binding digital commercial agreement upon submission.", margin, y);
-
-    doc.save("Master_Commercial_Agreement_InsuranceBoss.pdf");
-  };
-
-  const handleGuidelinesDownload = () => {
-    const link = document.createElement('a');
-    link.href = 'https://drive.google.com/uc?export=download&id=1HKe5ZZRFm1gI-9XFgY7FimEs6nbaHmOO';
-    link.setAttribute('download', 'The_Insurance_Boss_Commercial_Guidelines.pdf');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
 
   const currentYear = new Date().getFullYear();
 
@@ -351,93 +262,8 @@ export const PromotionPage: React.FC<PromotionPageProps> = ({ standalone = true,
       {/* Join Section */}
       {standalone && (
         <section id="apply" className="py-40 px-6 bg-[#0d0d0d] border-t border-white/5">
-          <div className="max-w-3xl mx-auto">
-            {!appSubmitted ? (
-              <div className="space-y-20">
-                <div>
-                  <div className="text-center mb-16">
-                    <h2 className="text-5xl font-black tracking-tighter mb-4 text-white uppercase">Initialize B2B Partnership</h2>
-                    <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Submit your commercial prospectus to start earning monthly residuals.</p>
-                  </div>
-                  <form onSubmit={handleAppSubmit} className="space-y-6 bg-[#111] p-10 rounded-[40px] border border-white/5 shadow-2xl">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <Input label="Full Name *" placeholder="..." value={appData.fullName} onChange={(v: string) => setAppData({...appData, fullName: v})} />
-                      <Input label="Business Name *" placeholder="..." value={appData.businessName} onChange={(v: string) => setAppData({...appData, businessName: v})} />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <Input label="Work Email *" placeholder="..." value={appData.email} onChange={(v: string) => setAppData({...appData, email: v})} />
-                      <Input label="Direct Phone *" placeholder="..." value={appData.phone} onChange={(v: string) => setAppData({...appData, phone: v})} />
-                    </div>
-                    <Input label="Primary B2B Industry *" placeholder="e.g. Accounting, Consulting" value={appData.industry} onChange={(v: string) => setAppData({...appData, industry: v})} />
-                    <Input label="Avg. Monthly Referrals *" placeholder="e.g. 5-10 Businesses" value={appData.avgReferrals} onChange={(v: string) => setAppData({...appData, avgReferrals: v})} />
-                    <Button type="submit" fullWidth className="py-5 text-lg uppercase tracking-widest shadow-2xl">Send Commercial Prospectus</Button>
-                  </form>
-                </div>
-
-                {/* Master Agreement Section */}
-                <div id="agreement" className="animate-in slide-in-from-bottom-6 duration-700">
-                  <div className="mb-8 text-center">
-                    <h2 className="text-4xl font-black tracking-tighter mb-2 text-white uppercase">Commercial Master Agreement</h2>
-                    <p className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Corporate Compliance Standards</p>
-                  </div>
-                  
-                  <div className="bg-[#111] border border-white/10 rounded-[40px] p-8 md:p-12 shadow-2xl space-y-8 mb-8">
-                    <div className="h-[350px] overflow-y-auto pr-4 no-scrollbar text-sm text-gray-400 font-medium leading-relaxed space-y-6">
-                      <p className="font-black text-white text-lg uppercase">1. Scope of B2B Inner Circle</p>
-                      <p>This Agreement governs your participation in The Insurance Boss Commercial Inner Circle. You agree to refer business entities for insurance reviews. You acknowledge that you are not a licensed agent.</p>
-                      <p className="font-black text-white text-lg uppercase">2. B2B Referral Residuals</p>
-                      <p>Referral fees are calculated as 3% of the gross annual premium received from the carrier for policies bound through the Inner Circle. Disbursements are made via ACH on the 1st of each month.</p>
-                      <p className="font-black text-white text-lg uppercase">3. Corporate Data Privacy</p>
-                      <p>All business data, FEINs, and commercial records shared via the vault are strictly confidential and protected by enterprise-grade security.</p>
-                      <div className="pt-10 border-t border-white/5 italic text-xs">
-                        Last Updated: {new Date().toLocaleString('en-US', { month: 'long' })} {currentYear}. Official digital log for the Commercial Inner Circle.
-                      </div>
-                    </div>
-
-                    <div className="pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-6">
-                      <div 
-                        className="flex items-center gap-4 group cursor-pointer select-none" 
-                        onClick={() => setAgreementAccepted(!agreementAccepted)}
-                      >
-                        <div className={`w-8 h-8 rounded-xl border-2 transition-all flex items-center justify-center shrink-0 ${agreementAccepted ? 'bg-[#EAB308] border-[#EAB308]' : 'border-white/20 group-hover:border-white/40'}`}>
-                          {agreementAccepted && <svg className="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}
-                        </div>
-                        <div>
-                          <div className="text-sm font-black tracking-tight text-white uppercase">Acknowledge Master Agreement</div>
-                          <div className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Digital Signature Required</div>
-                        </div>
-                      </div>
-                      <Button 
-                        variant="outline" 
-                        className="text-xs py-3 px-8 uppercase hover:scale-[1.05] transition-transform font-black tracking-widest" 
-                        onClick={generateMasterAgreementPDF}
-                      >
-                        Get PDF Copy
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Download Guidelines Button */}
-                  <div className="flex justify-center">
-                    <Button 
-                      variant="outline" 
-                      className="text-xs py-5 px-12 uppercase tracking-widest border-[#EAB308]/50 hover:border-[#EAB308] hover:scale-[1.05] transition-all font-black" 
-                      onClick={handleGuidelinesDownload}
-                    >
-                      Download Commercial Guidelines
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-20 animate-in zoom-in-95 duration-500">
-                <div className="w-24 h-24 bg-[#EAB308] rounded-full flex items-center justify-center mx-auto mb-8 shadow-[0_0_40px_rgba(234,179,8,0.4)]">
-                   <svg className="w-12 h-12 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>
-                </div>
-                <h2 className="text-4xl font-black tracking-tighter mb-4 text-white uppercase">Commercial Inquiry Received</h2>
-                <p className="text-gray-400 font-bold mb-10 uppercase tracking-widest text-xs">Our executive B2B desk will contact you to finalize your credentials.</p>
-              </div>
-            )}
+          <div className="max-w-7xl mx-auto">
+            <ZapierJoinForm />
           </div>
         </section>
       )}
@@ -449,16 +275,3 @@ export const PromotionPage: React.FC<PromotionPageProps> = ({ standalone = true,
     </div>
   );
 };
-
-const Input = ({ label, placeholder, value, onChange, type = 'text' }: any) => (
-  <div className="space-y-2">
-    <label className="block text-[10px] font-black text-[#EAB308] tracking-[0.2em] uppercase">{label}</label>
-    <input 
-      type={type}
-      placeholder={placeholder}
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      className="w-full bg-black border border-white/10 rounded-xl px-6 py-4 focus:outline-none focus:border-[#EAB308] transition-colors font-bold text-white placeholder:text-gray-800"
-    />
-  </div>
-);

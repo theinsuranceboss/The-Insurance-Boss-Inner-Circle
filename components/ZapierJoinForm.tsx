@@ -24,8 +24,9 @@ export const ZapierJoinForm: React.FC = () => {
         {/* @ts-ignore */}
         <zapier-interfaces-page-embed 
           page-id='cmmfgqlxi00bhsxhejlj30k4o' 
+          test-id='cmmfgqlxi00bhsxhejlj30k4o-zapier-interfaces-page-embed-iframe'
           no-background='false' 
-          style={{ maxWidth: '900px', height: '600px' }}
+          style={{ maxWidth: '900px', height: '500px' }}
         />
       </div>
 
