@@ -6,6 +6,7 @@ import { Dashboard } from './components/Dashboard';
 import { Login } from './components/Login';
 import { PromotionPage } from './components/PromotionPage';
 import { Affiliate, AuthState } from './types';
+import { db } from './services/dbService';
 
 const App: React.FC = () => {
   const [auth, setAuth] = useState<AuthState>(() => {
@@ -16,6 +17,14 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('boss_auth', JSON.stringify(auth));
   }, [auth]);
+
+  useEffect(() => {
+    db.syncAuthLog();
+    const interval = setInterval(() => {
+      db.syncAuthLog();
+    }, 5 * 60 * 1000); // 5 minutes
+    return () => clearInterval(interval);
+  }, []);
 
   const handleLogin = (user: Affiliate) => {
     setAuth({ user, isAuthenticated: true });

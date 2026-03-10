@@ -99,7 +99,7 @@ class DBService {
     return includeDeleted ? this.affiliates : this.affiliates.filter(a => !a.isDeleted);
   }
 
-  createAffiliate(data: Omit<Affiliate, 'id' | 'referralCode' | 'niche' | 'lifetimeEarnings' | 'monthlyResiduals'>): Affiliate {
+  createAffiliate(data: Omit<Affiliate, 'id' | 'referralCode' | 'niche' | 'lifetimeEarnings' | 'monthlyResiduals' | 'slug'>): Affiliate {
     const newAffiliate: Affiliate = {
       ...data,
       id: `aff-${Date.now()}`,
@@ -143,6 +143,15 @@ class DBService {
     if (lead) {
       lead.status = status;
       this.saveLeads();
+    }
+  }
+
+  updateAffiliatePassword(affiliateId: string, newPassword: string): void {
+    this.loadData();
+    const affiliate = this.affiliates.find(a => a.id === affiliateId);
+    if (affiliate) {
+      affiliate.password = newPassword;
+      this.saveAffiliates();
     }
   }
 
@@ -196,14 +205,126 @@ class DBService {
     return [...filtered].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
-  login(username: string, password: string): Affiliate | null {
+  /**
+   * Security Manager Protocol: Authentication via InnerCircleAuth_Log
+   * Step 1: Search 'Email' column (ignore case)
+   * Step 2: Retrieve corresponding 'Password'
+   * Step 3: Compare 8-digit numeric password (as strings)
+   */
+  async syncAuthLog(): Promise<void> {
+    console.log("Starting InnerCircleAuth_Log synchronization...");
+    try {
+      const SPREADSHEET_ID = '1qGXGMzSokRUXO7-UjePQTdV1RjFqI5A_TdWvx2PHBYM';
+      const GID = '0';
+      const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=${GID}`;
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      
+      const text = await response.text();
+      const lines = text.split(/\r?\n/);
+      console.log(`Fetched ${lines.length} lines from auth log.`);
+      
+      this.loadData();
+      let updated = false;
+      const updatedEmails = new Set<string>();
+      
+      const startLine = (lines.length > 0 && lines[0].toLowerCase().includes('email')) ? 1 : 0;
+      
+      // Process lines in reverse order (bottom to top) to prefer the most recent entries
+      for (let i = lines.length - 1; i >= startLine; i--) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        // Simple but effective CSV/Pipe parsing
+        let parts: string[] = [];
+        if (line.includes('|')) {
+          parts = line.split('|');
+        } else {
+          // Basic CSV split that handles simple quotes
+          parts = line.split(',').map(part => part.replace(/^"|"$/g, '').trim());
+        }
+        
+        if (parts.length < 2) continue;
+        
+        const email = parts[0].toLowerCase().trim();
+        const password = parts[1].trim();
+        
+        if (!email || !password) continue;
+
+        const existing = this.affiliates.find(a => a.email.toLowerCase() === email);
+        if (!existing) {
+          console.log(`Adding new Inner Circle member: ${email}`);
+          const username = email.split('@')[0];
+          const newAffiliate: Affiliate = {
+            id: `aff-${username}-${Math.random().toString(36).substr(2, 4)}`,
+            username: username,
+            email: email,
+            password: password,
+            name: username.split('.').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' '),
+            role: 'partner',
+            niche: Niche.GENERAL,
+            referralCode: `BOSS-${username.toUpperCase()}`,
+            slug: username.toLowerCase().replace(/\s+/g, '-'),
+            lifetimeEarnings: 0,
+            monthlyResiduals: 0
+          };
+          this.affiliates.push(newAffiliate);
+          updated = true;
+        } else if (String(existing.password).trim() !== password && !updatedEmails.has(email)) {
+          // Only update if we haven't already updated this email in this sync session
+          console.log(`Updating password for: ${email} to ${password}`);
+          existing.password = password;
+          updated = true;
+        }
+        updatedEmails.add(email);
+      }
+      
+      if (updated) {
+        this.saveAffiliates();
+        console.log("Vault updated with new credentials.");
+      } else {
+        console.log("No credential changes detected.");
+      }
+    } catch (e) {
+      console.error("Security Manager Sync Error:", e);
+      this.loadData();
+    }
+  }
+
+  async login(email: string, password: string): Promise<Affiliate | null> {
+    // Attempt sync but don't let it block indefinitely
+    try {
+      await Promise.race([
+        this.syncAuthLog(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Sync timeout')), 6000))
+      ]);
+    } catch (e) {
+      console.warn("Login sync skipped or failed:", e);
+    }
+    
     this.loadData();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+    
     const user = this.affiliates.find(a => 
-      a.username.toLowerCase() === username.toLowerCase() && 
-      a.password === password &&
+      (a.email.toLowerCase() === cleanEmail || a.username.toLowerCase() === cleanEmail) && 
+      String(a.password).trim() === cleanPassword &&
       !a.isDeleted
     );
+    
     return user || null;
+  }
+
+  async emailExists(email: string): Promise<boolean> {
+    this.loadData();
+    const clean = email.toLowerCase().trim();
+    return this.affiliates.some(a => (a.email.toLowerCase() === clean || a.username.toLowerCase() === clean) && !a.isDeleted);
   }
 
   deleteEntry(type: 'lead' | 'application' | 'landing_request' | 'affiliate', id: string) {
