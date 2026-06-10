@@ -4,6 +4,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>The Insurance Boss - Affiliate Portal</title>
+  <script>
+    // Intercept and allow setting of window.fetch (even if it's a read-only getter in the iframe)
+    (function() {
+      try {
+        var originalFetch = window.fetch;
+        var customFetch = originalFetch;
+        Object.defineProperty(window, 'fetch', {
+          get: function() { return customFetch; },
+          set: function(val) { customFetch = val; },
+          configurable: true,
+          enumerable: true
+        });
+      } catch (e) {
+        console.warn("window.fetch hook skipped: ", e);
+      }
+    })();
+  </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <script type="module" src="/index.tsx"></script>
   <link rel="stylesheet" href="/index.css">
