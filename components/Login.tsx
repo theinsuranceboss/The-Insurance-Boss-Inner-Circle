@@ -130,8 +130,13 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             )}
           </Button>
           
-          <div className="text-center">
-            <Link to="/affiliate" className="text-xs text-gray-500 hover:text-[#EAB308] transition-colors font-bold tracking-tighter">Inquire for Inner Circle Access</Link>
+          <div className="pt-4 border-t border-white/5 space-y-3">
+            <div className="text-gray-500 tracking-widest text-[9px] font-black uppercase text-center">New Member Inquiries</div>
+            <Link to="/affiliate?action=apply" className="block w-full">
+              <Button type="button" fullWidth className="py-4 shadow-xl tracking-widest flex items-center justify-center gap-2">
+                Required For Inner Circle Access
+              </Button>
+            </Link>
           </div>
         </form>
 

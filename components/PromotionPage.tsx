@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Button } from './Button';
 import { Affiliate } from '../types';
 import { ZapierJoinForm } from './ZapierJoinForm';
@@ -41,6 +41,20 @@ interface PromotionPageProps {
 }
 
 export const PromotionPage: React.FC<PromotionPageProps> = ({ standalone = true, referralAffiliate = null }) => {
+  const location = useLocation();
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    if (searchParams.get('action') === 'apply' || location.hash === '#apply') {
+      const applySection = document.getElementById('apply');
+      if (applySection) {
+        setTimeout(() => {
+          applySection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 150);
+      }
+    }
+  }, [location]);
+
   const stats = [
     { label: "Active Affiliates", value: "500+", icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
