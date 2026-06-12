@@ -60,7 +60,7 @@ const App: React.FC = () => {
         />
 
         {/* Dynamic Partner Landing Pages - Checked after static routes */}
-        <Route path="/:slug" element={<LandingPage />} />
+        <Route path="/inner-circle/:slug" element={<LandingPage />} />
 
         {/* Default Redirect */}
         <Route path="/" element={<Navigate to="/affiliate" replace />} />

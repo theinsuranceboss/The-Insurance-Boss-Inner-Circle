@@ -13,6 +13,27 @@ export enum LeadStatus {
   REJECTED = 'Rejected'
 }
 
+export interface LandingBlock {
+  id: string;
+  type: 'hero' | 'about' | 'insurance_types' | 'custom_text' | 'quote_form';
+  title: string;
+  content: string;
+  fontSize: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl';
+  alignment: 'left' | 'center' | 'right';
+  visible: boolean;
+  textColor?: string;
+  backgroundColor?: string;
+}
+
+export interface LandingSettings {
+  backgroundColor: string;
+  backgroundType: 'color' | 'gradient' | 'image';
+  backgroundImageUrl: string;
+  textColor: string;
+  accentColor: string;
+  blocks: LandingBlock[];
+}
+
 export interface Affiliate {
   id: string;
   name: string;
@@ -29,6 +50,8 @@ export interface Affiliate {
   monthlyResiduals?: number;
   isDeleted?: boolean;
   deletedAt?: string;
+  photoUrl?: string;
+  landingSettings?: LandingSettings;
 }
 
 export interface Lead {

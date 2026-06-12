@@ -94,12 +94,83 @@ class DBService {
     localStorage.setItem('boss_landing_reqs', JSON.stringify(this.landingPageRequests));
   }
 
+  private getDefaultLandingSettings(name: string): any {
+    return {
+      backgroundColor: '#0a0a0a',
+      backgroundType: 'color',
+      backgroundImageUrl: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?auto=format&fit=crop&q=80&w=1920',
+      textColor: '#ffffff',
+      accentColor: '#EAB308',
+      blocks: [
+        {
+          id: 'block-hero',
+          type: 'hero',
+          title: 'Residual Value. Institutional Risk Placements.',
+          content: 'Work directly with certified risk advisors representing over 50 gold-tier carrier syndicates. I have partnered with The Insurance Boss to connect your firm to custom commercial lines with absolute ease.',
+          fontSize: '4xl',
+          alignment: 'center',
+          visible: true
+        },
+        {
+          id: 'block-about',
+          type: 'about',
+          title: 'Your Dedicated Inner Circle Consultant',
+          content: `Hello! I'm ${name}. As your elite Commercial Partner, I analyze and structure high-capacity, multi-tier corporate coverages, trucking logistics, and liability packages. Together, we translate complex coverages into simple residual security. No license required—just top tier results.`,
+          fontSize: 'lg',
+          alignment: 'left',
+          visible: true
+        },
+        {
+          id: 'block-insurance-types',
+          type: 'insurance_types',
+          title: 'A Full Suite of Insurance Solutions Offered',
+          content: 'We provide specialized commercial carrier placement across four major risk matrices:',
+          fontSize: '2xl',
+          alignment: 'center',
+          visible: true
+        },
+        {
+          id: 'block-custom-text',
+          type: 'custom_text',
+          title: 'The Sovereign Carrier Advantage',
+          content: 'Through our secure network, we gain direct brokerage line permissions to process high-volume placements across Amazon DSP fleets, long-haul trucking liability, general builder risk bonds, and multi-tier tech/cyber liability plans.',
+          fontSize: 'md',
+          alignment: 'center',
+          visible: true
+        },
+        {
+          id: 'block-quote-form',
+          type: 'quote_form',
+          title: 'Request Institutional Proposal Quote',
+          content: 'Complete our secure 8-step commercial intake questionnaire. Your details are securely compiled into our system for underwriter placement.',
+          fontSize: '2xl',
+          alignment: 'center',
+          visible: true
+        }
+      ]
+    };
+  }
+
+  private enrichAffiliate(aff: Affiliate): Affiliate {
+    if (!aff) return aff;
+    const cloned = { ...aff };
+    if (!cloned.photoUrl) {
+      cloned.photoUrl = `https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=250`;
+    }
+    if (!cloned.landingSettings) {
+      cloned.landingSettings = this.getDefaultLandingSettings(cloned.name);
+    }
+    return cloned;
+  }
+
   getAffiliates(includeDeleted = false): Affiliate[] {
     this.loadData();
-    return includeDeleted ? this.affiliates : this.affiliates.filter(a => !a.isDeleted);
+    const list = includeDeleted ? this.affiliates : this.affiliates.filter(a => !a.isDeleted);
+    return list.map(a => this.enrichAffiliate(a));
   }
 
   createAffiliate(data: Omit<Affiliate, 'id' | 'referralCode' | 'niche' | 'lifetimeEarnings' | 'monthlyResiduals' | 'slug'>): Affiliate {
+    const usernameClean = data.username.toLowerCase().replace(/\s+/g, '-');
     const newAffiliate: Affiliate = {
       ...data,
       id: `aff-${Date.now()}`,
@@ -107,9 +178,12 @@ class DBService {
       niche: Niche.GENERAL,
       lifetimeEarnings: 0,
       monthlyResiduals: 0,
-      slug: data.username.toLowerCase().replace(/\s+/g, '-'),
+      slug: usernameClean,
       role: data.role || 'partner'
     };
+    newAffiliate.photoUrl = 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=250';
+    newAffiliate.landingSettings = this.getDefaultLandingSettings(newAffiliate.name);
+    
     this.affiliates.push(newAffiliate);
     this.saveAffiliates();
     return newAffiliate;
@@ -117,12 +191,14 @@ class DBService {
 
   getAffiliateBySlug(slug: string): Affiliate | undefined {
     this.loadData();
-    return this.affiliates.find(a => a.slug === slug && !a.isDeleted);
+    const aff = this.affiliates.find(a => a.slug === slug && !a.isDeleted);
+    return aff ? this.enrichAffiliate(aff) : undefined;
   }
 
   getAffiliateById(id: string): Affiliate | undefined {
     this.loadData();
-    return this.affiliates.find(a => a.id === id);
+    const aff = this.affiliates.find(a => a.id === id);
+    return aff ? this.enrichAffiliate(aff) : undefined;
   }
 
   getLeadsForAffiliate(affiliateId: string, includeDeleted = false): Lead[] {
