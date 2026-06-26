@@ -913,13 +913,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user: propUser, onLogout }
                     </tbody>
                   </table>
                 </div>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
               </div>
             )}
 
@@ -961,9 +954,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ user: propUser, onLogout }
                       <li>Copy the endpoint URL and register it in the box above. Saved.</li>
                     </ol>
                   </div>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Hero Headline (Line 2)</label>
+
+                  {/* Landing Page Editor */}
+                  <div className="space-y-4 border-t border-white/5 pt-8">
+                    <h3 className="text-xl font-bold text-[#EAB308] uppercase tracking-tight">Landing Page Editor</h3>
+                    <p className="text-gray-400 text-sm leading-relaxed max-w-2xl">
+                      Customize the Inner Circle landing page content that prospective members see when visiting the site.
+                    </p>
+                    <div className="space-y-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Hero Headline (Line 1)</label>
+                        <input
+                          type="text"
+                          defaultValue={localStorage.getItem('ic_hero_line1') || 'Earn Residual Income'}
+                          onChange={(e) => localStorage.setItem('ic_hero_line1', e.target.value)}
+                          className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-white font-bold focus:outline-none focus:border-[#EAB308] transition-all placeholder:text-gray-800"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Hero Headline (Line 2)</label>
                     <input
                       type="text"
                       defaultValue={localStorage.getItem('ic_hero_line2') || 'Without Selling Insurance'}
@@ -1018,15 +1027,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ user: propUser, onLogout }
                   </div>
                   <button
                     onClick={() => alert('Landing page settings saved! Changes will appear on next page load.')}
-                    className="w-full bg-[#EAB308] text-black font-black text-[11px] py-5 rounded-xl uppercase tracking-[0.2em] shadow-2xl hover:scale-[1.01] active:scale-95 transition-all"
+                    className="w-full bg-[#EAB308] text-black font-black text-[11px] py-5 rounded-xl uppercase tracking-[0.2em] shadow-2xl hover:scale-[1.01] active:scale-95 transition-all border-none"
                   >
                     Save Landing Page Settings
                   </button>
                 </div>
               </div>
-            )}
-          </>
+            </div>
+          </div>
         )}
+      </>
+    )}
 
         {/* --- DYNAMIC WINDOW MODALS --- */}
         {activeToolModal === 'view_member_profile' && inspectingMember && (
