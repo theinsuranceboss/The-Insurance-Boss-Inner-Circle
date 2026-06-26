@@ -286,6 +286,23 @@ export const LandingPage: React.FC = () => {
         )}
       </div>
 
+      {/* Lead Submission Form at the bottom */}
+      <section className="py-20 px-4 bg-white/[0.01] border-t border-white/5">
+        <div className="max-w-3xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-black tracking-tighter mb-4 uppercase" style={{ color: s.accentColor }}>
+              Submit a Client Lead
+            </h2>
+            <p className="text-gray-400 text-sm leading-relaxed max-w-xl mx-auto">
+              Ready to submit a commercial risk or policy placement? Input the details below to log the lead under {affiliate.name}'s profile.
+            </p>
+          </div>
+          <div className="rounded-[40px] p-1.5 bg-gradient-to-br from-white/10 to-transparent">
+            <RequestQuoteForm affiliateId={affiliate.id} title="" />
+          </div>
+        </div>
+      </section>
+
       {/* Elegant minimalist footer */}
       <footer className="py-16 border-t border-white/5 text-center bg-black/40">
         <p className="text-gray-600 text-[10px] font-black uppercase tracking-[0.3em] mb-4">© {new Date().getFullYear()} THE INSURANCE BOSS. ALL PRIVILEGES RESERVED.</p>

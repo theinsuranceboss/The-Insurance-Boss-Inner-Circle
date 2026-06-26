@@ -227,7 +227,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user: propUser, onLogout }
     }
   };
 
-  const referralLink = `${window.location.origin}${window.location.pathname}#/inner-circle/${currentUser.slug}`;
+  const referralLink = `${window.location.origin}/inner-circle/${currentUser.slug}`;
 
   const updateData = useCallback(() => {
     if (currentUser.role === 'admin') {
@@ -630,41 +630,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ user: propUser, onLogout }
                       <div className="space-y-6">
                         <div className="space-y-2">
                           <div className="flex justify-between items-center">
-                            <span className="text-[10px] font-black text-[#EAB308] uppercase tracking-widest font-mono">Production Link:</span>
-                            <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Global Live DNS</span>
+                            <span className="text-[10px] font-black text-[#EAB308] uppercase tracking-widest font-mono">Your Referral Link:</span>
+                            <span className="text-[9px] font-black text-[#EAB308]/70 uppercase tracking-widest">Active Partner Link</span>
                           </div>
                           <div className="flex flex-col sm:flex-row gap-4 items-center">
                             <div className="flex-1 w-full bg-black border border-white/10 rounded-xl px-5 py-4 text-gray-300 font-mono text-xs truncate">
-                              theinsuranceboss.com/inner-circle/{currentUser.slug}
-                            </div>
-                            <button 
-                              onClick={() => {
-                                navigator.clipboard.writeText(`theinsuranceboss.com/inner-circle/${currentUser.slug}`);
-                                alert("Production Link copied to clipboard!");
-                              }}
-                              className="w-full sm:w-auto bg-[#EAB308] text-black font-black px-8 py-4 rounded-xl uppercase tracking-widest text-[10px] shadow-xl hover:scale-[1.02] active:scale-95 transition-all outline-none border-none shrink-0"
-                            >
-                              Copy production link
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2 pt-2 border-t border-white/5">
-                          <div className="flex justify-between items-center">
-                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest font-mono">Preview / Sandbox Link (for this environment):</span>
-                            <span className="text-[9px] font-black text-green-400/70 uppercase tracking-widest">Active Testbed</span>
-                          </div>
-                          <div className="flex flex-col sm:flex-row gap-4 items-center">
-                            <div className="flex-1 w-full bg-black/40 border border-white/5 rounded-xl px-5 py-4 text-gray-400 font-mono text-xs truncate">
                               {referralLink}
                             </div>
                             <button 
                               onClick={() => {
                                 copyToClipboard(referralLink);
                               }}
-                              className="w-full sm:w-auto bg-white/5 text-gray-300 border border-white/10 font-bold px-8 py-4 rounded-xl uppercase tracking-widest text-[10px] hover:bg-white/10 transition-all outline-none shrink-0"
+                              className="w-full sm:w-auto bg-[#EAB308] text-black font-black px-8 py-4 rounded-xl uppercase tracking-widest text-[10px] shadow-xl hover:scale-[1.02] active:scale-95 transition-all outline-none border-none shrink-0"
                             >
-                              Copy preview link
+                              Copy Referral Link
                             </button>
                           </div>
                         </div>
