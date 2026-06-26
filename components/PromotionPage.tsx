@@ -149,9 +149,6 @@ export const PromotionPage: React.FC<PromotionPageProps> = ({ standalone = true,
         </div>
         
         <div className="relative z-20 max-w-7xl mx-auto text-center">
-          <div className="inline-block px-6 py-2 bg-[#EAB308] text-black text-[11px] font-black rounded-full mb-10 tracking-[0.1em] uppercase shadow-xl">
-            THE COMMERCIAL BOSS INNER CIRCLE
-          </div>
           <h1 className={`${standalone ? 'text-6xl md:text-[110px]' : 'text-4xl md:text-6xl'} font-black mb-8 leading-[0.9] tracking-tighter`}>
             <span className="text-[#EAB308] block">Earn Residual Income</span>
             <span className="text-white block">Without Selling Insurance</span>

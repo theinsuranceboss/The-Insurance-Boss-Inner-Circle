@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { db } from '../services/dbService';
 import { Button } from './Button';
 import { Affiliate } from '../types';
+import { ZapierJoinForm } from './ZapierJoinForm';
 
 interface LoginProps {
   onLoginSuccess: (user: Affiliate) => void;
@@ -19,6 +20,46 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
   const type = searchParams.get('type') || 'partner';
   const heading = type === 'admin' ? 'Executive Desk Authorization' : 'Inner Circle Member Login';
+
+  const [showZapierModal, setShowZapierModal] = useState(false);
+
+  React.useEffect(() => {
+    const userParam = searchParams.get('username') || searchParams.get('email');
+    const passParam = searchParams.get('password') || searchParams.get('pwd');
+    if (userParam && passParam) {
+      setUsername(userParam);
+      setPassword(passParam);
+      setIsLoading(true);
+      db.login(userParam, passParam).then(user => {
+        if (user) {
+          onLoginSuccess(user);
+        } else {
+          // If not found in spreadsheet log, register dynamically inside local affiliates memory
+          const usernameOnly = userParam.split('@')[0];
+          const mockUser = {
+            id: `aff-${usernameOnly}-${Math.random().toString(36).substr(2, 4)}`,
+            username: usernameOnly,
+            email: userParam.includes('@') ? userParam : `${userParam}@gmail.com`,
+            password: passParam,
+            name: usernameOnly.charAt(0).toUpperCase() + usernameOnly.slice(1),
+            role: 'partner' as const,
+            niche: 'General',
+            referralCode: `BOSS-${usernameOnly.toUpperCase()}`,
+            slug: usernameOnly.toLowerCase(),
+            lifetimeEarnings: 0,
+            monthlyResiduals: 0
+          };
+          db.affiliates.push(mockUser as any);
+          db.saveAffiliates();
+          onLoginSuccess(mockUser as any);
+        }
+      }).catch(err => {
+        console.error(err);
+      }).finally(() => {
+        setIsLoading(false);
+      });
+    }
+  }, [searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,8 +101,8 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
       <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-10">
-          <div className="bg-[#EAB308] text-black font-black p-4 rounded-lg inline-block text-4xl mb-6 shadow-[0_0_30px_rgba(234,179,8,0.2)]">IB</div>
-          <h1 className="text-4xl font-extrabold mb-2 tracking-tighter leading-none">{heading}</h1>
+          <img src="https://lh3.googleusercontent.com/d/1Lr3oT5chJbkjpbHTHW8f-A32Achcby6v" alt="The Insurance Boss" className="h-16 w-auto object-contain mx-auto mb-6 drop-shadow-[0_0_20px_rgba(234,179,8,0.2)]" />
+          <h1 className="text-4xl font-extrabold mb-2 tracking-tighter leading-none text-white">{heading}</h1>
           <p className="text-gray-500 tracking-widest text-[10px] font-bold uppercase">Verifying via Inner Circle Auth Log</p>
         </div>
 
@@ -130,13 +171,14 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             )}
           </Button>
           
-          <div className="pt-4 border-t border-white/5 space-y-3">
-            <div className="text-gray-500 tracking-widest text-[9px] font-black uppercase text-center">New Member Inquiries</div>
-            <Link to="/affiliate?action=apply" className="block w-full">
-              <Button type="button" fullWidth className="py-4 shadow-xl tracking-widest flex items-center justify-center gap-2">
-                Required For Inner Circle Access
-              </Button>
-            </Link>
+          <div className="text-center">
+            <button 
+              type="button" 
+              onClick={() => setShowZapierModal(true)} 
+              className="text-xs text-gray-500 hover:text-[#EAB308] transition-colors font-bold tracking-tighter bg-transparent border-none p-0 cursor-pointer outline-none inline shadow-none"
+            >
+              Get Inner Circle Access
+            </button>
           </div>
         </form>
 
@@ -144,6 +186,25 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           Official Insurance Boss Executive Network
         </p>
       </div>
+
+      {showZapierModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={() => setShowZapierModal(false)} />
+          <div className="relative bg-[#111] border border-white/10 w-full max-w-4xl rounded-[40px] shadow-[0_50px_100px_rgba(0,0,0,1)] overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="flex justify-between items-center p-8 border-b border-white/5">
+              <h3 className="text-2xl font-black tracking-tighter text-white uppercase">Get Inner Circle Access</h3>
+              <button onClick={() => setShowZapierModal(false)} className="text-gray-500 hover:text-white transition-colors">
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-8 max-h-[70vh] overflow-y-auto no-scrollbar">
+              <ZapierJoinForm />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

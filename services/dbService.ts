@@ -1,6 +1,7 @@
 
 import { Affiliate, Lead, LeadStatus, PartnerApplication, LandingPageRequest, Niche } from '../types';
 import { MOCK_AFFILIATES, MOCK_LEADS } from '../constants';
+import { supabase } from '../../../src/utils/supabase';
 
 class DBService {
   private affiliates: Affiliate[] = [];
@@ -338,7 +339,12 @@ class DBService {
         if (parts.length < 2) continue;
         
         const email = parts[0].toLowerCase().trim();
-        const password = parts[1].trim();
+        let password = parts[1].trim();
+        
+        // Pad numeric passwords to 8 digits if they were truncated by Google Sheets (drops leading zeros)
+        if (/^\d+$/.test(password) && password.length < 8) {
+          password = password.padStart(8, '0');
+        }
         
         if (!email || !password) continue;
 
@@ -361,11 +367,41 @@ class DBService {
           };
           this.affiliates.push(newAffiliate);
           updated = true;
+
+          // Sync new Google Sheets member to Supabase
+          supabase.rpc('update_agent_credentials_by_email', {
+            p_old_email: email,
+            p_new_email: email,
+            p_new_username: username,
+            p_new_password: password,
+            p_new_name: newAffiliate.name,
+            p_is_admin: false
+          }).then(({ error }) => {
+            if (error) console.error("Supabase sync error on new sheet member:", error.message);
+            else console.log(`Supabase synced new sheet member: ${email}`);
+          }).catch(err => {
+            console.error("Supabase RPC connection error on sheet member:", err);
+          });
         } else if (String(existing.password).trim() !== password && !updatedEmails.has(email)) {
           // Only update if we haven't already updated this email in this sync session
           console.log(`Updating password for: ${email} to ${password}`);
           existing.password = password;
           updated = true;
+
+          // Sync updated Google Sheets password to Supabase
+          supabase.rpc('update_agent_credentials_by_email', {
+            p_old_email: email,
+            p_new_email: email,
+            p_new_username: existing.username,
+            p_new_password: password,
+            p_new_name: existing.name,
+            p_is_admin: existing.role === 'admin'
+          }).then(({ error }) => {
+            if (error) console.error("Supabase sync error on updated sheet member password:", error.message);
+            else console.log(`Supabase synced updated password for: ${email}`);
+          }).catch(err => {
+            console.error("Supabase RPC connection error on sheet member password update:", err);
+          });
         }
         updatedEmails.add(email);
       }
@@ -396,7 +432,48 @@ class DBService {
     this.loadData();
     const cleanEmail = email.trim().toLowerCase();
     const cleanPassword = password.trim();
+
+    // 1. Try to authenticate and sync from Supabase first
+    try {
+      const { data, error } = await supabase.rpc('get_agent_profile_by_email_or_username', {
+        p_login: cleanEmail
+      });
+      if (!error && data && data.length > 0) {
+        const dbProfile = data[0];
+        if (dbProfile.plain_password && dbProfile.plain_password.trim() === cleanPassword) {
+          // Password matches Supabase. Update local affiliate store or create if missing
+          let localUser = this.affiliates.find(a => a.email.toLowerCase() === dbProfile.email.toLowerCase());
+          if (!localUser) {
+            localUser = {
+              id: `aff-${dbProfile.username}-${Math.random().toString(36).substr(2, 4)}`,
+              username: dbProfile.username,
+              email: dbProfile.email,
+              password: dbProfile.plain_password,
+              name: dbProfile.full_name,
+              role: dbProfile.is_admin ? 'admin' : 'partner',
+              niche: Niche.GENERAL,
+              referralCode: `BOSS-${dbProfile.username.toUpperCase()}`,
+              slug: dbProfile.username.toLowerCase().replace(/\s+/g, '-'),
+              lifetimeEarnings: 0,
+              monthlyResiduals: 0,
+              avatarUrl: dbProfile.avatar_url
+            };
+            this.affiliates.push(localUser);
+          } else {
+            localUser.password = dbProfile.plain_password;
+            localUser.avatarUrl = dbProfile.avatar_url;
+            localUser.name = dbProfile.full_name;
+            localUser.role = dbProfile.is_admin ? 'admin' : 'partner';
+          }
+          this.saveAffiliates();
+          return localUser;
+        }
+      }
+    } catch (err) {
+      console.error("Supabase login sync failed, falling back to local storage auth:", err);
+    }
     
+    // 2. Local Fallback authentication
     const user = this.affiliates.find(a => 
       (a.email.toLowerCase() === cleanEmail || a.username.toLowerCase() === cleanEmail) && 
       String(a.password).trim() === cleanPassword &&

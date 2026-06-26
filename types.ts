@@ -51,6 +51,7 @@ export interface Affiliate {
   isDeleted?: boolean;
   deletedAt?: string;
   photoUrl?: string;
+  avatarUrl?: string;
   landingSettings?: LandingSettings;
 }
 
@@ -80,6 +81,7 @@ export interface Lead {
     hasActiveCoverage?: boolean;
     knowsPremium?: boolean;
     hasDeclarations?: boolean;
+    [key: string]: any;
   };
 }
 

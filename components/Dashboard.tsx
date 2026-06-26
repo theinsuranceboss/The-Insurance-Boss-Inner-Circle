@@ -5,6 +5,8 @@ import { Affiliate, Lead, LeadStatus, LandingSettings } from '../types';
 import { Button } from './Button';
 import { CampaignTemplates } from './CampaignTemplates';
 import { VisualEditor } from './VisualEditor';
+import { FormConfigEditor, loadFormConfig } from './FormConfigEditor';
+import { supabase, uploadToSupabase } from '../../../src/utils/supabase';
 
 interface DashboardProps {
   user: Affiliate;
@@ -92,11 +94,12 @@ const Modal = ({ title, onClose, children }: { title: string, onClose: () => voi
   </div>
 );
 
-export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ user: propUser, onLogout }) => {
   // Sync state reactively with local updates
   const [currentUser, setCurrentUser] = useState<Affiliate>(() => {
-    return db.getAffiliateById(user.id) || user;
+    return db.getAffiliateById(propUser.id) || propUser;
   });
+  const user = currentUser;
 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [globalLeads, setGlobalLeads] = useState<Lead[]>([]);
@@ -112,6 +115,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [adminEditingMember, setAdminEditingMember] = useState<Affiliate | null>(null);
   const [inspectingMember, setInspectingMember] = useState<Affiliate | null>(null);
 
+  // Photo Upload State
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Password Change State
   const [newPassword, setNewPassword] = useState('');
   const [passwordChangeCode, setPasswordChangeCode] = useState<string | null>(null);
@@ -121,6 +128,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   
   // Edit Member State
   const [editingMember, setEditingMember] = useState<Affiliate | null>(null);
+
+  // Form Config and Selected Lead states
+  const [formConfig, setFormConfig] = useState(() => loadFormConfig());
+  const [showFormEditor, setShowFormEditor] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,10 +144,30 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       const code = `[ADMIN_ACTION: Update_PWD, Email=${currentUser.email}, New_Value=${newPassword}]`;
       setPasswordChangeCode(code);
 
+      // Step 2.5: Synchronize password with Supabase
+      try {
+        const { error } = await supabase.rpc('update_agent_credentials_by_email', {
+          p_old_email: user.email,
+          p_new_email: user.email,
+          p_new_username: user.username,
+          p_new_password: newPassword,
+          p_new_name: user.name,
+          p_is_admin: user.role === 'admin'
+        });
+        if (error) {
+          console.error("Supabase password sync failed:", error.message);
+        } else {
+          console.log("Supabase password synchronized successfully.");
+        }
+      } catch (rpcErr) {
+        console.error("Supabase RPC connection error:", rpcErr);
+      }
+
       // Refresh current user identity reactively
       const fresh = db.getAffiliateById(currentUser.id);
       if (fresh) setCurrentUser(fresh);
 
+      // Step 3: Attempt to sync with Google Sheets via Apps Script Web App
       const APPS_SCRIPT_URL = localStorage.getItem('boss_apps_script_url') || 'https://script.google.com/macros/s/AKfycbxFjHXurwZNAT5fAZua6amUBK4r9Uh62WlUfSMv0-zXo_zOub-gG0F4dAJ6nUCFLB6B/exec';
       if (APPS_SCRIPT_URL) {
         await fetch(APPS_SCRIPT_URL, {
@@ -151,6 +183,47 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       }
     } catch (err) {
       console.error("Password sync error:", err);
+    }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const publicUrl = await uploadToSupabase(file);
+      if (publicUrl) {
+        // Update locally
+        db.updateAffiliate(currentUser.id, { avatarUrl: publicUrl });
+
+        // Update Supabase
+        const { error } = await supabase.rpc('update_agent_avatar', {
+          p_username: currentUser.username,
+          p_avatar_url: publicUrl
+        });
+
+        if (error) {
+          console.error("Supabase avatar update failed:", error.message);
+          alert(`Photo uploaded, but database profile update failed: ${error.message}`);
+        } else {
+          // Update local component state
+          setCurrentUser(prev => ({ ...prev, avatarUrl: publicUrl }));
+          // Update session in localStorage
+          const session = localStorage.getItem('boss_auth');
+          if (session) {
+            const parsed = JSON.parse(session);
+            parsed.user.avatarUrl = publicUrl;
+            localStorage.setItem('boss_auth', JSON.stringify(parsed));
+          }
+          alert("Profile photo updated successfully!");
+        }
+      }
+    } catch (err: any) {
+      console.error("Photo upload failed:", err);
+      alert(`Photo upload failed: ${err.message || err}`);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -209,11 +282,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     }
   };
 
-  const handleCreateMember = (e: React.FormEvent) => {
+  const handleCreateMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMember.name || !newMember.username || !newMember.password || !newMember.email) {
       return alert("Please fill all member profile fields.");
     }
+
+    // 1. Create locally
     db.createAffiliate({
       name: newMember.name,
       username: newMember.username,
@@ -221,15 +296,88 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       email: newMember.email,
       role: newMember.role
     });
-    alert("New Inner Circle member authorized!");
+
+    // 2. Synchronize with Supabase in the background
+    try {
+      const { error } = await supabase.rpc('update_agent_credentials_by_email', {
+        p_old_email: newMember.email,
+        p_new_email: newMember.email,
+        p_new_username: newMember.username,
+        p_new_password: newMember.password,
+        p_new_name: newMember.name,
+        p_is_admin: newMember.role === 'admin'
+      });
+
+      if (error) {
+        console.error("Supabase creation sync error:", error.message);
+        alert(`New member authorized locally, but database sync failed: ${error.message}`);
+      } else {
+        console.log("Supabase credentials created successfully.");
+        alert("New Inner Circle member authorized and synchronized with database!");
+      }
+    } catch (err: any) {
+      console.error("Supabase connection error:", err);
+      alert(`New member authorized locally. Database connection failed: ${err.message || err}`);
+    }
+
     setActiveToolModal(null);
     setNewMember({ name: '', email: '', username: '', password: '', role: 'partner' });
     updateData();
   };
 
-  const handleUpdateMember = (e: React.FormEvent) => {
+  const handleDeleteMember = async (aff: Affiliate) => {
+    if (!confirm(`Are you sure you want to permanently delete member "${aff.name}"?\nThis will remove them locally and from the Supabase database.`)) {
+      return;
+    }
+
+    // 1. Delete locally
+    db.deleteEntry('affiliate', aff.id);
+    updateData();
+
+    // 2. Synchronize deletion with Supabase in the background
+    try {
+      // Find the user UUID in agent_profiles by username
+      const { data: profile, error: fetchError } = await supabase
+        .from('agent_profiles')
+        .select('id')
+        .eq('username', aff.username.toLowerCase())
+        .maybeSingle();
+
+      if (fetchError) {
+        console.error("Supabase user profile lookup failed:", fetchError.message);
+        alert(`Member deleted locally, but failed to look up member in Supabase: ${fetchError.message}`);
+        return;
+      }
+
+      if (profile && profile.id) {
+        const { error: deleteError } = await supabase.rpc('delete_user_by_admin', {
+          target_user_id: profile.id
+        });
+
+        if (deleteError) {
+          console.error("Supabase deletion failed:", deleteError.message);
+          alert(`Member deleted locally, but database deletion failed: ${deleteError.message}`);
+        } else {
+          alert(`Member "${aff.name}" successfully deleted locally and from database!`);
+        }
+      } else {
+        alert(`Member "${aff.name}" deleted locally. (Not found in database)`);
+      }
+    } catch (err: any) {
+      console.error("Supabase connection error on delete:", err);
+      alert(`Member deleted locally. Database connection failed: ${err.message || err}`);
+    }
+  };
+
+  const handleUpdateMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingMember) return;
+
+    // Get the old email before updating local storage
+    const originalAffiliate = db.getAffiliateById(editingMember.id);
+    const oldEmail = originalAffiliate ? originalAffiliate.email : editingMember.email;
+
+    // 1. Update in local database
     db.updateAffiliate(editingMember.id, {
       name: editingMember.name,
       email: editingMember.email,
@@ -237,7 +385,30 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       password: editingMember.password,
       role: editingMember.role
     });
-    alert("Member identity updated!");
+
+    // 2. Synchronize with Supabase in the background
+    try {
+      const { error } = await supabase.rpc('update_agent_credentials_by_email', {
+        p_old_email: oldEmail,
+        p_new_email: editingMember.email,
+        p_new_username: editingMember.username,
+        p_new_password: editingMember.password,
+        p_new_name: editingMember.name,
+        p_is_admin: editingMember.role === 'admin'
+      });
+
+      if (error) {
+        console.error("Supabase sync error:", error.message);
+        alert(`Member updated locally, but Supabase sync failed: ${error.message}`);
+      } else {
+        console.log("Supabase credentials synchronized successfully.");
+        alert("Member identity updated and synchronized with database!");
+      }
+    } catch (err: any) {
+      console.error("Supabase connection error:", err);
+      alert(`Member updated locally. Supabase connection failed: ${err.message || err}`);
+    }
+
     setActiveToolModal(null);
     setEditingMember(null);
     updateData();
@@ -283,7 +454,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       {/* HEADER NAVIGATION */}
       <nav className="border-b border-white/5 bg-[#111]/80 px-6 py-4 flex justify-between items-center sticky top-0 z-50 backdrop-blur-md">
         <div className="flex items-center gap-8">
-          <div className="bg-[#EAB308] text-black font-black px-3 py-1.5 rounded text-lg leading-none">IB</div>
+          <img src="https://lh3.googleusercontent.com/d/1Lr3oT5chJbkjpbHTHW8f-A32Achcby6v" alt="The Insurance Boss" className="h-8 md:h-10 w-auto object-contain" />
           
           {/* Tabs switch panel (Hides if admin is inside customizer page) */}
           {!adminEditingMember && (
@@ -314,21 +485,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         </div>
 
         <div className="flex items-center gap-6">
-          <div className="hidden lg:flex items-center gap-3 text-right">
-            {currentUser.photoUrl && (
-              <img 
-                src={currentUser.photoUrl} 
-                className="w-8 h-8 rounded-full object-cover border border-white/20" 
-                alt="Identity"
-                referrerPolicy="no-referrer"
-              />
-            )}
-            <div>
-              <div className="text-[9px] text-gray-500 font-black tracking-widest uppercase">{isAdmin ? 'Executive Desk' : 'Commercial Partner'}</div>
-              <div className="text-sm font-bold leading-none">{currentUser.name}</div>
+          {currentUser.avatarUrl ? (
+            <img 
+              src={currentUser.avatarUrl} 
+              alt={currentUser.name} 
+              className="w-10 h-10 rounded-full object-cover border border-[#EAB308]/30 shadow-[0_0_10px_rgba(234,179,8,0.2)]"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-[#EAB308]/10 border border-[#EAB308]/20 flex items-center justify-center text-[#EAB308] font-black text-sm shadow-inner">
+              {currentUser.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
             </div>
+          )}
+          <div className="hidden lg:block text-right">
+            <div className="text-[9px] text-gray-500 font-black tracking-widest uppercase">{isAdmin ? 'Executive Desk' : 'Commercial Partner'}</div>
+            <div className="text-sm font-bold leading-none">{currentUser.name}</div>
           </div>
-          <button onClick={() => setActiveToolModal('change_password')} className="text-[10px] bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg transition-colors border border-white/10 font-black tracking-widest uppercase outline-none">Security</button>
+          <button onClick={() => setActiveToolModal('change_password')} className="text-[10px] bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg transition-colors border border-white/10 font-black tracking-widest uppercase outline-none">Profile</button>
           <button onClick={onLogout} className="text-[10px] bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg transition-colors border border-white/10 font-black tracking-widest uppercase outline-none">Logout</button>
         </div>
       </nav>
@@ -501,10 +674,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
                   {/* DIRECT REFERRAL ASSIGNMENT DECK */}
                   <div className="lg:col-span-12">
-                    <div className="bg-[#EAB308] p-10 rounded-[32px] shadow-xl">
-                      <h2 className="text-3xl font-black text-black tracking-tighter mb-2 uppercase">DIRECT INTAKE PORTAL SUBMISSION</h2>
-                      <p className="text-black/80 font-bold text-xs mb-8 uppercase tracking-widest font-mono">Manually append and register warm prospects directly into your list.</p>
-                      <RequestQuoteForm affiliateId={currentUser.id} />
+                    <div className="bg-[#EAB308] p-10 rounded-[40px] shadow-2xl">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-4">
+                        <div>
+                          <h2 className="text-4xl font-black text-black tracking-tighter mb-2 uppercase">
+                            {formConfig.formTitle || "ADD YOUR LEAD TO YOUR DATABASE"}
+                          </h2>
+                          <p className="text-black/85 font-bold text-sm">
+                            {formConfig.formSubtitle || "Directly deposit lead data into your database."}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setShowFormEditor(true)}
+                          className="bg-black text-[#EAB308] hover:bg-black/90 font-black px-6 py-3 rounded-xl uppercase tracking-widest text-xs shadow-xl transition-all flex items-center gap-2"
+                        >
+                          <span className="text-sm">⚙️</span> Customize Form
+                        </button>
+                      </div>
+                      <RequestQuoteForm affiliateId={currentUser.id} config={formConfig} />
                     </div>
                   </div>
                 </div>
@@ -599,6 +786,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                               <td className="px-8 py-5 text-gray-500 text-xs font-mono">{new Date(lead.createdAt).toLocaleDateString()}</td>
                               <td className="px-8 py-5 text-right">
                                 <div className="flex justify-end gap-3">
+                                  <button 
+                                    onClick={() => setSelectedLead(lead)} 
+                                    className="px-3 py-1 bg-blue-500/10 text-blue-500 rounded text-xs font-bold uppercase tracking-wider hover:bg-blue-500 hover:text-white transition-colors"
+                                    title="View Details"
+                                  >
+                                    View
+                                  </button>
                                   {viewRecycleBin ? (
                                     <>
                                       <button onClick={() => handleRestoreLead(lead.id)} className="px-3 py-1 bg-green-500/10 text-green-500 rounded text-xs font-bold uppercase tracking-wider">Restore</button>
@@ -658,7 +852,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                         <tr key={aff.id} className="hover:bg-white/[0.01]">
                           <td className="px-8 py-5">
                             <img 
-                              src={aff.photoUrl || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=250'} 
+                              src={aff.avatarUrl || aff.photoUrl || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=250'} 
                               className="w-12 h-12 rounded-full object-cover border border-white/20" 
                               alt="avatar"
                               referrerPolicy="no-referrer"
@@ -681,13 +875,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                             </span>
                           </td>
                           <td className="px-8 py-5 text-right">
-                            <div className="flex justify-end gap-3">
+                            <div className="flex justify-end gap-3 font-semibold">
                               <button 
                                 onClick={() => {
                                   setInspectingMember(aff);
                                   setActiveToolModal('view_member_profile');
                                 }}
-                                className="text-xs text-gray-400 hover:text-white px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-all border border-white/10"
+                                className="text-xs text-gray-400 hover:text-white px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-all border border-white/10 font-bold"
                               >
                                 View full Profile
                               </button>
@@ -706,6 +900,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                               >
                                 Edit Credentials
                               </button>
+                              <button 
+                                onClick={() => handleDeleteMember(aff)} 
+                                className="text-xs text-red-500 hover:text-red-400 transition-all font-black uppercase"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
                             </div>
                           </td>
                         </tr>
@@ -754,6 +961,67 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
                       <li>Copy the endpoint URL and register it in the box above. Saved.</li>
                     </ol>
                   </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Hero Headline (Line 2)</label>
+                    <input
+                      type="text"
+                      defaultValue={localStorage.getItem('ic_hero_line2') || 'Without Selling Insurance'}
+                      onChange={(e) => localStorage.setItem('ic_hero_line2', e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-white font-bold focus:outline-none focus:border-[#EAB308] transition-all placeholder:text-gray-800"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Hero Subtitle</label>
+                    <textarea
+                      rows={3}
+                      defaultValue={localStorage.getItem('ic_hero_subtitle') || 'Join our exclusive network of affiliates and earn passive income by connecting clients with our insurance experts. No license required.'}
+                      onChange={(e) => localStorage.setItem('ic_hero_subtitle', e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-white font-bold focus:outline-none focus:border-[#EAB308] transition-all placeholder:text-gray-800 resize-none"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Active Affiliates Count</label>
+                    <input
+                      type="text"
+                      defaultValue={localStorage.getItem('ic_stat_affiliates') || '500+'}
+                      onChange={(e) => localStorage.setItem('ic_stat_affiliates', e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-white font-bold focus:outline-none focus:border-[#EAB308] transition-all placeholder:text-gray-800"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Paid to Affiliates (e.g. $20k+)</label>
+                    <input
+                      type="text"
+                      defaultValue={localStorage.getItem('ic_stat_paid') || '$20k+'}
+                      onChange={(e) => localStorage.setItem('ic_stat_paid', e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-white font-bold focus:outline-none focus:border-[#EAB308] transition-all placeholder:text-gray-800"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Leads Processed (e.g. 10,000+)</label>
+                    <input
+                      type="text"
+                      defaultValue={localStorage.getItem('ic_stat_leads') || '10.000+'}
+                      onChange={(e) => localStorage.setItem('ic_stat_leads', e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-white font-bold focus:outline-none focus:border-[#EAB308] transition-all placeholder:text-gray-800"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Carrier Partners</label>
+                    <input
+                      type="text"
+                      defaultValue={localStorage.getItem('ic_stat_carriers') || '50+'}
+                      onChange={(e) => localStorage.setItem('ic_stat_carriers', e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-white font-bold focus:outline-none focus:border-[#EAB308] transition-all placeholder:text-gray-800"
+                    />
+                  </div>
+                  <button
+                    onClick={() => alert('Landing page settings saved! Changes will appear on next page load.')}
+                    className="w-full bg-[#EAB308] text-black font-black text-[11px] py-5 rounded-xl uppercase tracking-[0.2em] shadow-2xl hover:scale-[1.01] active:scale-95 transition-all"
+                  >
+                    Save Landing Page Settings
+                  </button>
                 </div>
               </div>
             )}
@@ -766,7 +1034,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
             <div className="space-y-8 py-4 font-semibold">
               <div className="flex flex-col md:flex-row items-center gap-6 border-b border-white/5 pb-6">
                 <img 
-                  src={inspectingMember.photoUrl || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=250'} 
+                  src={inspectingMember.avatarUrl || inspectingMember.photoUrl || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=250'} 
                   className="w-24 h-24 rounded-full object-cover border-4 border-black shadow-xl" 
                   alt={inspectingMember.name}
                   referrerPolicy="no-referrer"
@@ -837,45 +1105,91 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         )}
 
         {activeToolModal === 'change_password' && (
-          <Modal title="Security Protocol: Update Key Access" onClose={() => { setActiveToolModal(null); setPasswordChangeCode(null); setNewPassword(''); }}>
-            {!passwordChangeCode ? (
-              <form onSubmit={handlePasswordChange} className="space-y-6 py-4">
-                <div className="text-center mb-6 space-y-2">
-                  <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">Requesting a new customized password for <span className="text-[#EAB308]">{currentUser.email}</span></p>
-                  <div className="bg-white/5 border border-white/10 p-3 rounded-xl inline-block mt-2">
-                    <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1">Active Password</p>
-                    <p className="text-lg font-black text-[#EAB308] tracking-tighter">{currentUser.password}</p>
-                  </div>
+          <Modal title="Profile & Security Settings" onClose={() => { setActiveToolModal(null); setPasswordChangeCode(null); setNewPassword(''); }}>
+            <div className="space-y-8 py-4">
+              {/* Photo Upload Section */}
+              <div className="flex flex-col items-center justify-center p-6 bg-white/[0.02] border border-white/5 rounded-3xl space-y-4">
+                <h4 className="text-xs font-black uppercase tracking-widest text-gray-500">Profile Photo</h4>
+                <div className="relative group">
+                  {currentUser.avatarUrl || currentUser.photoUrl ? (
+                    <img 
+                      src={currentUser.avatarUrl || currentUser.photoUrl} 
+                      alt={currentUser.name} 
+                      className="w-24 h-24 rounded-full object-cover border-2 border-[#EAB308] shadow-[0_0_20px_rgba(234,179,8,0.3)]"
+                    />
+                  ) : (
+                    <div className="w-24 h-24 rounded-full bg-[#EAB308]/10 border border-[#EAB308]/20 flex items-center justify-center text-[#EAB308] font-black text-3xl shadow-inner">
+                      {currentUser.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                  {isUploading && (
+                    <div className="absolute inset-0 bg-black/75 rounded-full flex items-center justify-center">
+                      <svg className="animate-spin h-6 w-6 text-[#EAB308]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                    </div>
+                  )}
                 </div>
-                <Field 
-                  label="New Secure Password" 
-                  type="text" 
-                  value={newPassword} 
-                  onChange={setNewPassword} 
-                  placeholder="Enter your new password" 
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handlePhotoUpload} 
+                  accept="image/*" 
+                  className="hidden" 
                 />
-                <button type="submit" className="w-full bg-[#EAB308] text-black font-black text-[10px] py-4.5 rounded-xl uppercase tracking-[0.2em] shadow-2xl hover:scale-[1.01] active:scale-95 transition-all mt-4 border-none">
-                  Sync & Record Password
-                </button>
-              </form>
-            ) : (
-              <div className="space-y-8 py-4 animate-in fade-in zoom-in-95 duration-500">
-                <div className="bg-black/50 border border-[#EAB308]/20 p-6 rounded-2xl font-mono text-xs text-[#EAB308] break-all select-all">
-                  {passwordChangeCode}
-                </div>
-                <div className="bg-green-500/10 border border-green-500/20 p-6 rounded-2xl text-xs">
-                  <p className="text-green-500 font-bold leading-relaxed">
-                    Your password has been changed in the vault and is now synced with your profile. Use it for your next session log.
-                  </p>
-                </div>
-                <button 
-                  onClick={() => { setActiveToolModal(null); setPasswordChangeCode(null); setNewPassword(''); }}
-                  className="w-full bg-white/5 text-white font-black text-[10px] py-4.5 rounded-xl uppercase tracking-[0.2em] hover:bg-white/10 transition-all border border-white/10"
+                <button
+                  type="button"
+                  disabled={isUploading}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-4 py-2 bg-white/5 hover:bg-white/10 text-[10px] font-black uppercase tracking-widest text-gray-300 hover:text-white border border-white/10 rounded-xl transition-all disabled:opacity-50"
                 >
-                  Exit Security Desk
+                  {isUploading ? 'Uploading...' : 'Upload Photo'}
                 </button>
               </div>
-            )}
+
+              {/* Password Change Form */}
+              <div className="border-t border-white/5 pt-8">
+                {!passwordChangeCode ? (
+                  <form onSubmit={handlePasswordChange} className="space-y-6">
+                    <div className="text-center mb-6 space-y-2">
+                      <p className="text-gray-500 text-sm font-bold">Change your personalized login password for <span className="text-[#EAB308]">{currentUser.email}</span></p>
+                      <div className="bg-white/5 border border-white/10 p-3 rounded-xl inline-block">
+                        <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Current Password</p>
+                        <p className="text-lg font-black text-[#EAB308] tracking-tighter">{currentUser.password}</p>
+                      </div>
+                    </div>
+                    <Field 
+                      label="New Personalized Password" 
+                      type="text" 
+                      value={newPassword} 
+                      onChange={setNewPassword} 
+                      placeholder="Enter your new secure password" 
+                    />
+                    <button type="submit" className="w-full bg-[#EAB308] text-black font-black text-[11px] py-5 rounded-xl uppercase tracking-[0.2em] shadow-2xl hover:scale-[1.01] active:scale-95 transition-all mt-4 border-none font-black">
+                      Initialize Sync
+                    </button>
+                  </form>
+                ) : (
+                  <div className="space-y-8 animate-in fade-in zoom-in-95 duration-500">
+                    <div className="bg-black/50 border border-[#EAB308]/20 p-6 rounded-2xl font-mono text-xs text-[#EAB308] break-all select-all">
+                      {passwordChangeCode}
+                    </div>
+                    <div className="bg-green-500/10 border border-green-500/20 p-6 rounded-2xl text-xs">
+                      <p className="text-green-500 font-bold leading-relaxed">
+                        Your new password has been recorded and is being synced with the Admin Dashboard. Use your new password for your next login.
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => { setActiveToolModal(null); setPasswordChangeCode(null); setNewPassword(''); }}
+                      className="w-full bg-white/5 text-white font-black text-[11px] py-5 rounded-xl uppercase tracking-[0.2em] hover:bg-white/10 transition-all border border-white/10 font-bold"
+                    >
+                      Close Profile Portal
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </Modal>
         )}
 
@@ -925,6 +1239,56 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
           </Modal>
         )}
 
+        {showFormEditor && (
+          <FormConfigEditor onClose={() => {
+            setShowFormEditor(false);
+            setFormConfig(loadFormConfig());
+          }} />
+        )}
+
+        {selectedLead && (
+          <div className="fixed inset-0 z-[10000] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-[#111] border border-white/10 rounded-[32px] w-full max-w-xl p-8 space-y-6 shadow-2xl relative">
+              <button
+                onClick={() => setSelectedLead(null)}
+                className="absolute top-6 right-6 text-gray-500 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+              <div>
+                <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Lead Details</h2>
+                <p className="text-[#EAB308] text-[10px] font-black uppercase tracking-widest mt-1">Lead ID: {selectedLead.id}</p>
+              </div>
+
+              <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                <DetailRow label="Name" value={selectedLead.name} />
+                <DetailRow label="Email" value={selectedLead.email} />
+                <DetailRow label="Phone" value={selectedLead.phone} />
+                <DetailRow label="Product Type" value={selectedLead.productType || ''} />
+                <DetailRow label="Status" value={selectedLead.status} />
+                <DetailRow label="Date" value={new Date(selectedLead.createdAt).toLocaleString()} />
+                
+                {selectedLead.details && Object.entries(selectedLead.details).map(([key, val]) => {
+                  if (key === 'zipCode') return null; // Avoid duplicating if zip is also there
+                  const formattedLabel = key
+                    .replace(/([A-Z])/g, ' $1')
+                    .replace(/^./, str => str.toUpperCase());
+                  
+                  let displayVal = '';
+                  if (Array.isArray(val)) {
+                    displayVal = val.join(', ');
+                  } else if (typeof val === 'boolean') {
+                    displayVal = val ? 'Yes' : 'No';
+                  } else {
+                    displayVal = String(val);
+                  }
+                  return <DetailRow key={key} label={formattedLabel} value={displayVal} />;
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
     </div>
   );
@@ -954,5 +1318,12 @@ const SummaryItem = ({ label, value }: any) => (
   <div className="flex justify-between border-b border-white/5 pb-2.5 last:border-none last:pb-0 font-medium">
     <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{label}</span>
     <span className="text-xs font-bold text-white uppercase">{value !== undefined && value !== null ? String(value) : 'N/A'}</span>
+  </div>
+);
+
+const DetailRow = ({ label, value }: { label: string, value: string }) => (
+  <div className="flex justify-between items-center border-b border-white/5 pb-2 last:border-none">
+    <span className="text-gray-500 text-[10px] font-black uppercase tracking-widest">{label}</span>
+    <span className="text-white font-bold text-sm">{value || 'N/A'}</span>
   </div>
 );

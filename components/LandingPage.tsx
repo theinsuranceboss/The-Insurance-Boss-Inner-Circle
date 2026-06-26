@@ -22,7 +22,7 @@ export const LandingPage: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
         <div className="text-center">
-          <div className="bg-[#EAB308] text-black font-black p-4 rounded-lg inline-block text-2xl mb-4 animate-pulse">IB</div>
+          <img src="https://lh3.googleusercontent.com/d/1Lr3oT5chJbkjpbHTHW8f-A32Achcby6v" alt="The Insurance Boss" className="h-16 w-auto object-contain mx-auto mb-4 animate-pulse" />
           <div className="text-[#EAB308] font-black tracking-widest text-xs">Initializing secure referral page...</div>
         </div>
       </div>
